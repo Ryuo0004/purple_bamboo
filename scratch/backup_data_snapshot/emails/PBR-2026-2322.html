@@ -1,0 +1,153 @@
+
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🌿 Booking Confirmation &amp; Schedule - [PBR-2026-2322] | Purple Bamboo Resort</title>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background-color: #f1f5f9; margin: 0; padding: 25px 15px; color: #1e293b; }
+        .email-card { max-width: 620px; margin: 0 auto; background: #ffffff; border-radius: 16px; overflow: hidden; box-shadow: 0 10px 25px rgba(0,0,0,0.08); border: 1px solid #e2e8f0; }
+        .hero-banner { background: linear-gradient(135deg, #3b0764 0%, #581c87 50%, #7c3aed 100%); padding: 35px 25px; text-align: center; color: #ffffff; }
+        .resort-tag { display: inline-block; background: rgba(245, 158, 11, 0.25); border: 1px solid #f59e0b; color: #fbbf24; font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 1.5px; padding: 4px 14px; border-radius: 20px; margin-bottom: 12px; }
+        .hero-title { margin: 0 0 8px 0; font-size: 26px; font-weight: 800; color: #ffffff; letter-spacing: -0.5px; }
+        .hero-sub { margin: 0; font-size: 14px; color: #e9d5ff; }
+        
+        .content-body { padding: 30px 25px; }
+        .greeting { font-size: 15px; line-height: 1.6; color: #334155; margin-bottom: 22px; }
+        
+        /* Highlight Schedule Box */
+        .schedule-box { background: #fdf4ff; border: 1.5px solid #f0abfc; border-radius: 14px; padding: 18px 20px; margin-bottom: 25px; }
+        .box-heading { font-size: 13px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.8px; color: #86198f; margin-bottom: 12px; display: flex; align-items: center; gap: 6px; }
+        .booked-on-badge { background: #fae8ff; border: 1px solid #e879f9; color: #701a75; padding: 4px 10px; border-radius: 6px; font-weight: 700; font-size: 13px; display: inline-block; margin-bottom: 8px; }
+        
+        /* Check-In / Check-Out Grid */
+        .times-grid { display: table; width: 100%; margin-top: 15px; border-collapse: separate; border-spacing: 10px 0; }
+        .time-col { display: table-cell; width: 50%; background: #ffffff; border-radius: 10px; padding: 14px 16px; border: 1px solid #f5d0fe; vertical-align: top; box-shadow: 0 2px 6px rgba(0,0,0,0.03); }
+        .time-label { font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px; color: #6b21a8; margin-bottom: 4px; }
+        .time-date { font-size: 14px; font-weight: 700; color: #0f172a; margin-bottom: 4px; }
+        .time-hour { font-size: 16px; font-weight: 900; color: #d97706; }
+        
+        /* Details Table */
+        .details-table { width: 100%; border-collapse: collapse; margin-bottom: 25px; }
+        .details-table td { padding: 10px 12px; font-size: 14px; border-bottom: 1px solid #f1f5f9; }
+        .details-table td.lbl { color: #64748b; font-weight: 600; width: 38%; }
+        .details-table td.val { color: #0f172a; font-weight: 700; }
+        
+        /* Payment Callout */
+        .payment-box { background: #fffbeb; border: 1.5px solid #fcd34d; border-radius: 12px; padding: 16px 20px; margin-bottom: 25px; }
+        .total-row { display: flex; justify-content: space-between; align-items: center; font-size: 18px; font-weight: 900; color: #92400e; margin-bottom: 6px; }
+        .total-amount { font-size: 22px; color: #b45309; }
+        
+        /* Guidelines */
+        .guidelines-box { background: #f8fafc; border-left: 4px solid #7c3aed; padding: 14px 18px; border-radius: 0 10px 10px 0; margin-bottom: 25px; font-size: 13px; color: #475569; line-height: 1.6; }
+        .guidelines-box strong { color: #1e1b4b; }
+        
+        .footer { background: #0f172a; padding: 25px; text-align: center; color: #94a3b8; font-size: 12px; line-height: 1.6; }
+        .footer a { color: #fbbf24; text-decoration: none; }
+    </style>
+</head>
+<body>
+    <div class="email-card">
+        <!-- Header -->
+        <div class="hero-banner">
+            <span class="resort-tag">🌿 Purple Bamboo Resort</span>
+            <h1 class="hero-title">Booking Confirmation</h1>
+            <p class="hero-sub">Ref Code: <strong>PBR-2026-2322</strong></p>
+        </div>
+
+        <div class="content-body">
+            <p class="greeting">
+                Hello <strong>Vince Gian Ildefonso</strong>,<br>
+                Thank you for choosing Purple Bamboo Resort! Your reservation details and stay schedule have been successfully registered. Below is your official schedule summary:
+            </p>
+
+            <!-- Booking Schedule & Times -->
+            <div class="schedule-box">
+                <div class="box-heading">📅 Official Reservation Schedule</div>
+                <div>
+                    <span style="font-size: 13px; color: #4c1d95;">Date & Time You Booked:</span><br>
+                    <strong class="booked-on-badge">🗓️ Wednesday, September 23, 2026 at 1:58 AM</strong>
+                </div>
+
+                <!-- Check-in and Check-out Times -->
+                <div class="times-grid">
+                    <div class="time-col">
+                        <div class="time-label">🚪 Check-In Schedule</div>
+                        <div class="time-date">Sunday, September 27, 2026</div>
+                        <div class="time-hour">🕒 2:00 PM</div>
+                        <span style="font-size: 11px; color: #64748b;">(Front Desk Check-In begins)</span>
+                    </div>
+                    <div class="time-col">
+                        <div class="time-label">🏃 Check-Out Schedule</div>
+                        <div class="time-date">Wednesday, September 30, 2026</div>
+                        <div class="time-hour">🕒 12:00 PM (Noon)</div>
+                        <span style="font-size: 11px; color: #64748b;">(Standard Room Key Return)</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Accommodation & Stay Details -->
+            <table class="details-table">
+                <tr>
+                    <td class="lbl">Accommodation / Item:</td>
+                    <td class="val">Pool Room</td>
+                </tr>
+                <tr>
+                    <td class="lbl">Reservation Type:</td>
+                    <td class="val">House Kubo Overnight Stay</td>
+                </tr>
+                <tr>
+                    <td class="lbl">Stay Duration:</td>
+                    <td class="val">Stay Duration: <strong>3 Night(s)</strong> (Sunday, September 27, 2026 to Wednesday, September 30, 2026)</td>
+                </tr>
+                <tr>
+                    <td class="lbl">Registered Guests:</td>
+                    <td class="val">2 Pax</td>
+                </tr>
+                <tr>
+                    <td class="lbl">Guest Contact:</td>
+                    <td class="val">0961 261 3415 (vinceildefonso626@gmail.com)</td>
+                </tr>
+                <tr>
+                    <td class="lbl">Special Notes:</td>
+                    <td class="val">None specified</td>
+                </tr>
+            </table>
+
+            <!-- Payment Breakdown -->
+            <div class="payment-box">
+                <div class="total-row">
+                    <span>Total Amount Payable:</span>
+                    <span class="total-amount">₱6,600.00</span>
+                </div>
+                <div style="font-size: 12px; color: #78350f; line-height: 1.5;">
+                    💳 <strong>GCash Payment Verification:</strong> Please upload your payment receipt screenshot or enter your GCash reference code to finalize confirmation.
+                </div>
+            </div>
+
+            <!-- Important Resort Reminders -->
+            <div class="guidelines-box">
+                <strong>📌 Important Check-In Reminders:</strong><br>
+                • <strong>Standard Check-In Time:</strong> Starts at <strong>2:00 PM</strong>. Please present this confirmation email voucher and a valid government ID upon arrival at the Front Desk.<br>
+                • <strong>Standard Check-Out Time:</strong> Strictly by <strong>12:00 PM (Noon)</strong> to allow thorough cleaning and sanitation for incoming guests.<br>
+                • <strong>Early Arrival / Late Check-Out:</strong> Subject to room availability and resort management confirmation.
+            </div>
+
+            <p style="font-size: 13px; color: #64748b; margin: 0 0 10px 0;">
+                Need assistance? Feel free to contact our Front Desk at <strong>09566978679</strong> or reply directly to this email.
+            </p>
+        </div>
+
+        <!-- Footer -->
+        <div class="footer">
+            <strong>The Blessed Purple Bamboo Beach Resort</strong><br>
+            Zone 4 Magamo-gamo, Telbang, Alaminos City, Pangasinan<br>
+            Hotline: 09566978679 | Email: theblessedpbbresort23@gmail.com<br>
+            <span style="font-size: 11px; opacity: 0.8; margin-top: 8px; display: block;">
+                This is an automated booking confirmation. Please save or present this email upon arrival.
+            </span>
+        </div>
+    </div>
+</body>
+</html>

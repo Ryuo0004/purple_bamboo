@@ -1,0 +1,2006 @@
+<?php
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
+require_once __DIR__ . '/booking_store.php';
+require_once __DIR__ . '/inventory_store.php';
+require_once __DIR__ . '/dining_store.php';
+
+$user_role = $_SESSION['role'] ?? 'guest';
+$is_admin_layout = ($user_role === 'admin' || $user_role === 'staff');
+$admin_full_name = $_SESSION['full_name'] ?? 'Super Admin';
+
+// -------------------------------------------------------------
+// INVENTORY LISTS FOR FILTERS
+// -------------------------------------------------------------
+$all_kubos = InventoryStore::getAllKubos();
+$all_activities = InventoryStore::getAllActivities(true);
+
+// -------------------------------------------------------------
+// DATE & MONTH NAVIGATION
+// -------------------------------------------------------------
+$today_str = date('Y-m-d');
+$current_year = intval(date('Y'));
+$current_month = intval(date('m'));
+
+$month = isset($_GET['month']) ? intval($_GET['month']) : $current_month;
+$year = isset($_GET['year']) ? intval($_GET['year']) : $current_year;
+
+if ($month < 1 || $month > 12) {
+    $month = $current_month;
+    $year = $current_year;
+}
+
+// First day of month math
+$firstDay = strtotime(sprintf('%04d-%02d-01', $year, $month));
+$totalDays = intval(date('t', $firstDay));
+$startDayOfWeek = intval(date('w', $firstDay)); // 0 = Sunday, 6 = Saturday
+$monthName = date('F Y', $firstDay);
+
+// Navigation links
+$prevMonth = $month - 1;
+$prevYear = $year;
+if ($prevMonth < 1) {
+    $prevMonth = 12;
+    $prevYear = $year - 1;
+}
+$nextMonth = $month + 1;
+$nextYear = $year;
+if ($nextMonth > 12) {
+    $nextMonth = 1;
+    $nextYear = $year + 1;
+}
+
+// Trailing days from previous month
+$prevMonthLastDay = intval(date('t', strtotime("-1 month", $firstDay)));
+$leadingDays = [];
+for ($p = $startDayOfWeek - 1; $p >= 0; $p--) {
+    $leadingDays[] = $prevMonthLastDay - $p;
+}
+
+// -------------------------------------------------------------
+// FETCH ALL BOOKINGS (LIVE DATABASE: ACTIVE + ARCHIVED)
+// -------------------------------------------------------------
+$all_bookings = BookingStore::getAllBookings();
+
+// Also retrieve archived bookings so past reservations are always visible
+global $pdo;
+if ($pdo) {
+    try {
+        $stmtArch = $pdo->query("SELECT * FROM booking_archive");
+        $archRows = $stmtArch->fetchAll(PDO::FETCH_ASSOC) ?: [];
+        if (!empty($archRows)) {
+            $existing_ids = array_column($all_bookings, 'id');
+            foreach ($archRows as $arch) {
+                if (!in_array($arch['id'], $existing_ids)) {
+                    $all_bookings[] = $arch;
+                }
+            }
+        }
+    } catch (PDOException $e) {}
+}
+
+// Fetch any associated addon_reservations for full activity item coverage
+$addons_by_ref = [];
+if ($pdo) {
+    try {
+        $stmtAddons = $pdo->query("
+            SELECT ar.*, a.activity_name, a.price, a.duration, a.duration_minutes
+            FROM addon_reservations ar
+            LEFT JOIN activities a ON ar.activity_id = a.activity_id
+        ");
+        $addonRows = $stmtAddons->fetchAll(PDO::FETCH_ASSOC) ?: [];
+        foreach ($addonRows as $ar) {
+            $refKey = trim($ar['reservation_id'] ?? '');
+            if ($refKey !== '') {
+                $addons_by_ref[$refKey][] = $ar;
+            }
+        }
+    } catch (Throwable $e) {}
+}
+
+// -------------------------------------------------------------
+// GROUP BY BOOKING REFERENCE: ONE BOOKING = ONE CALENDAR RESERVATION
+// -------------------------------------------------------------
+$grouped_reservations = [];
+
+foreach ($all_bookings as $b) {
+    $ref = trim($b['id'] ?? '');
+    if ($ref === '') {
+        $ref = 'BOOKING-' . ($b['booking_id'] ?? rand(1000, 9999));
+    }
+
+    $b_cin = !empty($b['check_in']) ? substr($b['check_in'], 0, 10) : $today_str;
+    $b_cout = !empty($b['check_out']) ? substr($b['check_out'], 0, 10) : $b_cin;
+    if ($b_cout < $b_cin) $b_cout = $b_cin;
+
+    $b_type = strtolower($b['type'] ?? 'house');
+    $item_title = trim($b['item_name'] ?? '');
+    if ($item_title === '') {
+        $item_title = ($b_type === 'activity') ? 'Resort Activity' : 'House Kubo';
+    }
+
+    if (!isset($grouped_reservations[$ref])) {
+        $grouped_reservations[$ref] = [
+            'id' => $ref,
+            'guest_name' => $b['guest_name'] ?? 'Resort Guest',
+            'guest_email' => $b['guest_email'] ?? '',
+            'guest_phone' => $b['guest_phone'] ?? '',
+            'profile_id' => $b['profile_id'] ?? '',
+            'user_id' => $b['user_id'] ?? null,
+            'booking_status' => $b['booking_status'] ?? 'pending',
+            'payment_status' => $b['payment_status'] ?? 'proof_submitted',
+            'check_in' => $b_cin,
+            'check_out' => $b_cout,
+            'time_slot' => $b['time_slot'] ?? '',
+            'pax' => intval($b['pax'] ?? 1),
+            'total_amount' => floatval($b['total_amount'] ?? 0),
+            'special_notes' => $b['special_notes'] ?? '',
+            'guest_list' => $b['guest_list'] ?? '',
+            'created_at' => $b['created_at'] ?? '',
+            'has_house' => ($b_type === 'house'),
+            'has_activity' => ($b_type === 'activity'),
+            'items' => [
+                [
+                    'name' => $item_title,
+                    'type' => $b_type,
+                    'item_id' => intval($b['item_id'] ?? 0),
+                    'check_in' => $b_cin,
+                    'check_out' => $b_cout,
+                    'time_slot' => $b['time_slot'] ?? '',
+                    'pax' => intval($b['pax'] ?? 1),
+                    'icon' => ($b_type === 'activity') ? 'fa-water-ladder' : 'fa-house-chimney'
+                ]
+            ]
+        ];
+    } else {
+        // Merge into existing parent booking with same reference ID
+        $parent = &$grouped_reservations[$ref];
+        if ($b_cin < $parent['check_in']) $parent['check_in'] = $b_cin;
+        if ($b_cout > $parent['check_out']) $parent['check_out'] = $b_cout;
+        if (floatval($b['total_amount'] ?? 0) > $parent['total_amount']) {
+            $parent['total_amount'] = floatval($b['total_amount']);
+        }
+        if (!empty($b['special_notes']) && strpos($parent['special_notes'], $b['special_notes']) === false) {
+            $parent['special_notes'] .= "\n" . $b['special_notes'];
+        }
+        if ($b_type === 'house') $parent['has_house'] = true;
+        if ($b_type === 'activity') $parent['has_activity'] = true;
+
+        // Check if item is already recorded
+        $item_exists = false;
+        foreach ($parent['items'] as $it) {
+            if ($it['name'] === $item_title && $it['type'] === $b_type) {
+                $item_exists = true;
+                break;
+            }
+        }
+        if (!$item_exists) {
+            $parent['items'][] = [
+                'name' => $item_title,
+                'type' => $b_type,
+                'item_id' => intval($b['item_id'] ?? 0),
+                'check_in' => $b_cin,
+                'check_out' => $b_cout,
+                'time_slot' => $b['time_slot'] ?? '',
+                'pax' => intval($b['pax'] ?? 1),
+                'icon' => ($b_type === 'activity') ? 'fa-water-ladder' : 'fa-house-chimney'
+            ];
+        }
+        unset($parent);
+    }
+}
+
+// Attach any addon_reservations to their parent booking
+foreach ($addons_by_ref as $refKey => $addonList) {
+    if (isset($grouped_reservations[$refKey])) {
+        foreach ($addonList as $ad) {
+            $actName = $ad['activity_name'] ?? ('Activity #' . $ad['activity_id']);
+            $alreadyExists = false;
+            foreach ($grouped_reservations[$refKey]['items'] as $it) {
+                if ($it['name'] === $actName && $it['type'] === 'activity') {
+                    $alreadyExists = true;
+                    break;
+                }
+            }
+            if (!$alreadyExists) {
+                $schedStr = !empty($ad['activity_date']) ? date('M d, Y', strtotime($ad['activity_date'])) : '';
+                if (!empty($ad['start_time'])) {
+                    $schedStr .= ' at ' . date('g:i A', strtotime($ad['start_time']));
+                }
+                $grouped_reservations[$refKey]['items'][] = [
+                    'name' => $actName,
+                    'type' => 'activity',
+                    'item_id' => intval($ad['activity_id'] ?? 0),
+                    'check_in' => $ad['activity_date'] ?? $grouped_reservations[$refKey]['check_in'],
+                    'check_out' => $ad['activity_date'] ?? $grouped_reservations[$refKey]['check_out'],
+                    'time_slot' => $schedStr,
+                    'pax' => intval($ad['quantity'] ?? 1),
+                    'icon' => 'fa-water-ladder'
+                ];
+                $grouped_reservations[$refKey]['has_activity'] = true;
+            }
+        }
+    }
+}
+
+// Expand items if special_notes has line-item accommodations or activities
+foreach ($grouped_reservations as &$res) {
+    $notes = $res['special_notes'] ?? '';
+    
+    // Check if notes list individual accommodations or activities: • 1x Beach Kubo...
+    if (preg_match_all('/•\s*(?:\d+x\s*)?([^\n\r@•\(\]]+?)(?:\s*@|\s*\(|\s*\[|\s*-\s*₱|\s*$)/m', $notes, $matches)) {
+        $parsedNames = array_filter(array_map('trim', $matches[1]));
+        
+        $hasCompound = false;
+        foreach ($res['items'] as $it) {
+            if (stripos($it['name'], 'More') !== false || stripos($it['name'], '+') !== false) {
+                $hasCompound = true;
+                break;
+            }
+        }
+        
+        if ($hasCompound && count($parsedNames) >= 2) {
+            $newItems = [];
+            foreach ($parsedNames as $pName) {
+                if (empty($pName)) continue;
+                $isAct = (stripos($notes, "[Pool & Activities Add-ons]") !== false && stripos($notes, $pName) > stripos($notes, "[Pool & Activities Add-ons]"));
+                $newItems[] = [
+                    'name' => $pName,
+                    'type' => $isAct ? 'activity' : 'house',
+                    'item_id' => 0,
+                    'check_in' => $res['check_in'],
+                    'check_out' => $res['check_out'],
+                    'time_slot' => $res['time_slot'],
+                    'pax' => $res['pax'],
+                    'icon' => $isAct ? 'fa-water-ladder' : 'fa-house-chimney'
+                ];
+                if ($isAct) $res['has_activity'] = true;
+                else $res['has_house'] = true;
+            }
+            if (!empty($newItems)) {
+                $res['items'] = $newItems;
+            }
+        }
+    }
+
+    // Format display title and summary
+    $itemCount = count($res['items']);
+    if ($itemCount === 0) {
+        $res['primary_item'] = 'Resort Reservation';
+        $res['summary_text'] = 'Reservation';
+    } elseif ($itemCount === 1) {
+        $res['primary_item'] = $res['items'][0]['name'];
+        $res['summary_text'] = $res['items'][0]['name'];
+    } else {
+        $res['primary_item'] = $res['items'][0]['name'];
+        $actCount = 0;
+        $houseCount = 0;
+        foreach ($res['items'] as $it) {
+            if ($it['type'] === 'activity') $actCount++;
+            else $houseCount++;
+        }
+
+        if ($houseCount >= 1 && $actCount === 1) {
+            $res['summary_text'] = $res['primary_item'] . ' + 1 Activity';
+        } elseif ($houseCount >= 1 && $actCount > 1) {
+            $res['summary_text'] = $res['primary_item'] . ' + ' . $actCount . ' Activities';
+        } else {
+            $rem = $itemCount - 1;
+            $res['summary_text'] = $res['primary_item'] . ' + ' . $rem . ' More';
+        }
+    }
+}
+unset($res);
+
+// -------------------------------------------------------------
+// CALCULATE STATS & MAP TO CALENDAR ACROSS DATE RANGE
+// -------------------------------------------------------------
+$total_bookings_count = count($grouped_reservations);
+$past_bookings_count = 0;
+$present_bookings_count = 0;
+$future_bookings_count = 0;
+
+$calendar_map = []; // 'YYYY-MM-DD' => [ grouped reservations active on this day ]
+
+foreach ($grouped_reservations as $ref => $res) {
+    $status = strtolower($res['booking_status'] ?? 'pending');
+    $cin = $res['check_in'];
+    $cout = $res['check_out'];
+    if ($cout < $cin) $cout = $cin;
+
+    // Timeline categorization
+    if ($cout < $today_str || in_array($status, ['checked_out', 'completed'])) {
+        $past_bookings_count++;
+        $timeline_cat = 'past';
+    } elseif ($cin <= $today_str && $cout >= $today_str) {
+        $present_bookings_count++;
+        $timeline_cat = 'present';
+    } else {
+        $future_bookings_count++;
+        $timeline_cat = 'future';
+    }
+
+    $res['timeline_cat'] = $timeline_cat;
+
+    // Multi-day span across stay range
+    $start_ts = strtotime($cin);
+    $end_ts = strtotime($cout);
+
+    for ($curr_ts = $start_ts; $curr_ts <= $end_ts; $curr_ts = strtotime('+1 day', $curr_ts)) {
+        $dStr = date('Y-m-d', $curr_ts);
+        $wDay = intval(date('w', $curr_ts)); // 0 = Sun, 6 = Sat
+
+        // Determine span type for continuous visual connection
+        if ($cin === $cout) {
+            $span_type = 'single';
+            $stay_role = 'single';
+        } elseif ($dStr === $cin) {
+            $span_type = 'start';
+            $stay_role = 'checkin';
+        } elseif ($dStr === $cout) {
+            $span_type = 'end';
+            $stay_role = 'checkout';
+        } else {
+            $span_type = 'middle';
+            $stay_role = 'stay';
+        }
+
+        $dayItem = $res;
+        $dayItem['span_type'] = $span_type;
+        $dayItem['stay_role'] = $stay_role;
+        $dayItem['wday'] = $wDay;
+        $dayItem['curr_date'] = $dStr;
+
+        $calendar_map[$dStr][] = $dayItem;
+    }
+}
+
+// URL Filters
+$type_filter = isset($_GET['type']) ? strtolower(trim($_GET['type'])) : 'all';
+$item_filter = isset($_GET['item_id']) ? intval($_GET['item_id']) : 0;
+$status_filter = isset($_GET['status']) ? strtolower(trim($_GET['status'])) : 'all';
+$time_filter = isset($_GET['time_scope']) ? strtolower(trim($_GET['time_scope'])) : 'all';
+?>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title><?= $is_admin_layout ? 'Schedule Calendar | Admin Console' : 'Booking Calendar | Purple Bamboo Beach Resort' ?></title>
+    
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <?php if ($is_admin_layout): ?>
+        <link rel="stylesheet" href="admin-style.css">
+    <?php else: ?>
+        <link rel="stylesheet" href="style.css">
+    <?php endif; ?>
+
+    <style>
+        /* Admin Full Calendar Theme */
+        .admin-main-wrapper {
+            margin-left: 260px !important;
+            width: calc(100% - 260px) !important;
+            max-width: calc(100% - 260px) !important;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            position: relative;
+            box-sizing: border-box;
+            background: #f8fafc;
+        }
+        .admin-container {
+            width: 100% !important;
+            max-width: 100% !important;
+            margin: 0 !important;
+            padding: 1.5rem 2rem 3rem !important;
+            box-sizing: border-box !important;
+            flex: 1;
+        }
+        @media (max-width: 991px) {
+            .admin-main-wrapper {
+                margin-left: 0 !important;
+                width: 100% !important;
+                max-width: 100% !important;
+            }
+            .admin-container {
+                padding: 1rem 1rem 2rem !important;
+            }
+        }
+        .admin-cal-wrapper {
+            display: flex;
+            flex-direction: column;
+            gap: 1.5rem;
+            width: 100%;
+        }
+
+        /* KPI Ribbon */
+        .cal-kpi-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 1rem;
+        }
+        .cal-kpi-card {
+            background: #ffffff;
+            border: 1px solid #e2e8f0;
+            border-radius: 14px;
+            padding: 1.25rem 1.5rem;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+        .cal-kpi-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 16px rgba(0, 0, 0, 0.08);
+        }
+        .cal-kpi-info h3 {
+            font-size: 1.85rem;
+            font-weight: 800;
+            margin: 0;
+            color: #0f172a;
+            font-family: 'Outfit', sans-serif;
+            line-height: 1.1;
+        }
+        .cal-kpi-info p {
+            font-size: 0.85rem;
+            font-weight: 600;
+            color: #64748b;
+            margin: 0.35rem 0 0 0;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        .cal-kpi-icon {
+            width: 52px;
+            height: 52px;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.35rem;
+            flex-shrink: 0;
+        }
+
+        /* Control Toolbar */
+        .cal-toolbar-card {
+            background: #ffffff;
+            border: 1px solid #e2e8f0;
+            border-radius: 16px;
+            padding: 1.25rem;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+        }
+        .cal-toolbar-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            gap: 1rem;
+        }
+        .cal-month-nav {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            flex-wrap: wrap;
+        }
+        .cal-month-title {
+            font-family: 'Outfit', sans-serif;
+            font-size: 1.6rem;
+            font-weight: 800;
+            color: #1e1b4b;
+            margin: 0;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        .cal-jump-select {
+            background: #f8fafc;
+            border: 1.5px solid #cbd5e1;
+            color: #0f172a;
+            font-size: 0.9rem;
+            font-weight: 700;
+            padding: 0.45rem 0.85rem;
+            border-radius: 8px;
+            outline: none;
+            cursor: pointer;
+            transition: border-color 0.2s ease;
+        }
+        .cal-jump-select:focus {
+            border-color: #7c3aed;
+        }
+
+        .cal-filters-group {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            flex-wrap: wrap;
+        }
+        .cal-filter-btn {
+            background: #f1f5f9;
+            color: #475569;
+            border: 1px solid #e2e8f0;
+            padding: 0.45rem 0.9rem;
+            border-radius: 8px;
+            font-size: 0.82rem;
+            font-weight: 700;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            transition: all 0.2s ease;
+            cursor: pointer;
+        }
+        .cal-filter-btn:hover {
+            background: #e2e8f0;
+            color: #0f172a;
+        }
+        .cal-filter-btn.active {
+            background: #7c3aed;
+            color: #ffffff;
+            border-color: #7c3aed;
+            box-shadow: 0 2px 8px rgba(124, 58, 237, 0.35);
+        }
+
+        .cal-search-input {
+            background: #f8fafc;
+            border: 1.5px solid #cbd5e1;
+            color: #0f172a;
+            padding: 0.45rem 0.85rem 0.45rem 2rem;
+            border-radius: 8px;
+            font-size: 0.85rem;
+            outline: none;
+            width: 220px;
+            transition: all 0.2s ease;
+        }
+        .cal-search-input:focus {
+            border-color: #7c3aed;
+            width: 260px;
+            background: #ffffff;
+        }
+        .cal-search-box {
+            position: relative;
+            display: inline-flex;
+            align-items: center;
+        }
+        .cal-search-box i {
+            position: absolute;
+            left: 0.75rem;
+            color: #94a3b8;
+            font-size: 0.85rem;
+        }
+
+        /* Calendar Grid Table */
+        .cal-grid-card {
+            background: #ffffff;
+            border: 1px solid #e2e8f0;
+            border-radius: 16px;
+            overflow: hidden;
+            box-shadow: 0 4px 14px rgba(0, 0, 0, 0.04);
+        }
+        .cal-grid-header {
+            display: grid;
+            grid-template-columns: repeat(7, 1fr);
+            background: linear-gradient(135deg, #1e1035, #2a114d);
+            border-bottom: 2px solid #7c3aed;
+            text-align: center;
+        }
+        .cal-day-col-title {
+            padding: 0.75rem 0.5rem;
+            color: #ffffff;
+            font-family: 'Outfit', sans-serif;
+            font-weight: 700;
+            font-size: 0.88rem;
+            text-transform: uppercase;
+            letter-spacing: 0.75px;
+        }
+        .cal-day-col-title.weekend {
+            color: #fde68a;
+        }
+
+        .cal-grid-body {
+            display: grid;
+            grid-template-columns: repeat(7, 1fr);
+            gap: 1px;
+            background: #e2e8f0; /* grid lines */
+        }
+        .cal-day-cell {
+            background: #ffffff;
+            min-height: 140px;
+            padding: 8px;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            position: relative;
+            cursor: pointer;
+            transition: all 0.18s ease;
+            user-select: none;
+        }
+        .cal-day-cell:hover {
+            background: #fbf9ff;
+            box-shadow: inset 0 0 0 2px #7c3aed;
+        }
+        .cal-day-cell:hover .cal-cell-num {
+            color: #7c3aed;
+        }
+        .cal-day-cell.cal-cell-other-month {
+            background: #f8fafc;
+            opacity: 0.55;
+            cursor: default;
+        }
+        .cal-day-cell.cal-cell-past {
+            background: #fcfdfe;
+        }
+        .cal-day-cell.cal-cell-today {
+            background: #fefce8;
+            border: 2px solid #f59e0b !important;
+            z-index: 2;
+            box-shadow: 0 0 12px rgba(245, 158, 11, 0.25);
+        }
+        .cal-day-cell.cal-cell-today:hover {
+            box-shadow: 0 0 14px rgba(245, 158, 11, 0.35), inset 0 0 0 2px #f59e0b;
+        }
+
+        /* Date Schedule Modal Styling */
+        .cal-date-modal-dialog {
+            background: #ffffff;
+            border-radius: 20px;
+            width: 100%;
+            max-width: 680px;
+            max-height: 90vh;
+            display: flex;
+            flex-direction: column;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+            border: 1px solid #e2e8f0;
+            overflow: hidden;
+            animation: modalFadeIn 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+        .cal-date-modal-body {
+            padding: 1.5rem;
+            overflow-y: auto;
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 1.25rem;
+        }
+        .cal-day-booking-card {
+            background: #ffffff;
+            border: 1.5px solid #e2e8f0;
+            border-radius: 12px;
+            padding: 1rem 1.25rem;
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.03);
+            transition: all 0.2s ease;
+        }
+        .cal-day-booking-card:hover {
+            border-color: #cbd5e1;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06);
+        }
+        .cal-day-booking-card.card-house {
+            border-left: 4px solid #7c3aed;
+        }
+        .cal-day-booking-card.card-activity {
+            border-left: 4px solid #059669;
+        }
+
+
+        .cal-cell-top {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 2px;
+        }
+        .cal-cell-num {
+            font-family: 'Outfit', sans-serif;
+            font-weight: 800;
+            font-size: 1rem;
+            color: #1e293b;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .cal-cell-today .cal-cell-num {
+            color: #b45309;
+        }
+        .cal-today-pill {
+            font-size: 0.65rem;
+            font-weight: 800;
+            background: #f59e0b;
+            color: #ffffff;
+            padding: 2px 7px;
+            border-radius: 9999px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        .cal-count-badge {
+            font-size: 0.7rem;
+            font-weight: 700;
+            background: #ede9fe;
+            color: #6d28d9;
+            padding: 2px 6px;
+            border-radius: 6px;
+        }
+
+        /* Grouped Booking Event Banners (Continuous Multi-Day Reservation) */
+        .cal-event-list {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            overflow-y: auto;
+            max-height: 140px;
+            padding: 2px 0;
+        }
+        .cal-event-banner {
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            padding: 5px 7px;
+            font-size: 0.72rem;
+            font-weight: 700;
+            line-height: 1.25;
+            cursor: pointer;
+            text-decoration: none;
+            transition: transform 0.15s ease, filter 0.15s ease;
+            box-sizing: border-box;
+            user-select: none;
+            z-index: 2;
+            overflow: hidden;
+            border: 1.5px solid transparent;
+        }
+        .cal-event-banner:hover {
+            z-index: 5;
+            filter: brightness(0.95);
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.12);
+        }
+
+        /* Unified Status Appearances (Requirement 8) */
+        /* Confirmed / Approved -> Royal Purple Theme */
+        .cal-banner-confirmed {
+            background: #f5f3ff;
+            color: #5b21b6;
+            border-color: #c4b5fd;
+        }
+        .cal-banner-confirmed .banner-meta { color: #7c3aed; }
+
+        /* Checked-In / Active Stay -> Vibrant Purple/Indigo */
+        .cal-banner-checked_in {
+            background: #ede9fe;
+            color: #4338ca;
+            border-color: #a78bfa;
+        }
+        .cal-banner-checked_in .banner-meta { color: #6d28d9; }
+
+        /* Pending Approval / Proof Submitted -> Warm Amber/Gold */
+        .cal-banner-pending,
+        .cal-banner-proof_submitted {
+            background: #fffbeb;
+            color: #92400e;
+            border-color: #fcd34d;
+        }
+        .cal-banner-pending .banner-meta,
+        .cal-banner-proof_submitted .banner-meta { color: #b45309; }
+
+        /* Completed / Checked Out -> Slate Muted */
+        .cal-banner-completed,
+        .cal-banner-checked_out {
+            background: #f1f5f9;
+            color: #475569;
+            border-color: #cbd5e1;
+            opacity: 0.85;
+        }
+        .cal-banner-completed .banner-meta,
+        .cal-banner-checked_out .banner-meta { color: #64748b; }
+
+        /* Cancelled -> Muted Red */
+        .cal-banner-cancelled {
+            background: #fff1f2;
+            color: #9f1239;
+            border-color: #fecdd3;
+            opacity: 0.75;
+        }
+
+        /* Continuous Multi-Day Connected Banners (Requirement 3 & 9) */
+        .cal-span-single {
+            border-radius: 7px;
+            margin-left: 0;
+            margin-right: 0;
+        }
+        .cal-span-start {
+            border-top-left-radius: 7px;
+            border-bottom-left-radius: 7px;
+            border-top-right-radius: 0;
+            border-bottom-right-radius: 0;
+            margin-right: -9px; /* Seamless continuous bar across cells */
+            border-right: none !important;
+        }
+        .cal-span-middle {
+            border-radius: 0;
+            margin-left: -9px;
+            margin-right: -9px;
+            border-left: none !important;
+            border-right: none !important;
+        }
+        .cal-span-end {
+            border-top-left-radius: 0;
+            border-bottom-left-radius: 0;
+            border-top-right-radius: 7px;
+            border-bottom-right-radius: 7px;
+            margin-left: -9px;
+            border-left: none !important;
+        }
+
+        /* Row boundary breaks (Saturday -> Sunday wrap) */
+        .cal-span-break-right {
+            border-top-right-radius: 5px !important;
+            border-bottom-right-radius: 5px !important;
+            margin-right: 0 !important;
+            border-right: 1.5px solid inherit !important;
+        }
+        .cal-span-break-left {
+            border-top-left-radius: 5px !important;
+            border-bottom-left-radius: 5px !important;
+            margin-left: 0 !important;
+            border-left: 1.5px solid inherit !important;
+        }
+
+        /* Banner Internal Content Elements */
+        .cal-banner-header-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 4px;
+            overflow: hidden;
+            white-space: nowrap;
+        }
+        .cal-banner-guest-title {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            font-weight: 800;
+            font-size: 0.75rem;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        .cal-banner-ref-tag {
+            font-size: 0.62rem;
+            font-weight: 800;
+            opacity: 0.85;
+            font-family: 'Outfit', sans-serif;
+            flex-shrink: 0;
+        }
+        .cal-banner-sub-row {
+            font-size: 0.68rem;
+            font-weight: 600;
+            margin-top: 1px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            opacity: 0.92;
+        }
+        .cal-banner-role-badge {
+            font-size: 0.58rem;
+            font-weight: 800;
+            padding: 1px 4px;
+            border-radius: 3px;
+            text-transform: uppercase;
+            letter-spacing: 0.4px;
+            flex-shrink: 0;
+            background: rgba(0, 0, 0, 0.08);
+        }
+
+        /* Empty state cell prompt */
+        .cal-empty-prompt {
+            font-size: 0.7rem;
+            color: #cbd5e1;
+            text-align: center;
+            margin-top: auto;
+            margin-bottom: auto;
+            font-style: italic;
+            user-select: none;
+        }
+
+        /* Calendar Legend */
+        .cal-legend-card {
+            background: #ffffff;
+            border: 1px solid #e2e8f0;
+            border-radius: 12px;
+            padding: 1rem 1.25rem;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            gap: 1rem;
+        }
+        .cal-legend-items {
+            display: flex;
+            align-items: center;
+            gap: 1.25rem;
+            flex-wrap: wrap;
+            font-size: 0.82rem;
+            font-weight: 600;
+            color: #475569;
+        }
+        .cal-legend-item {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .cal-legend-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 3px;
+            display: inline-block;
+        }
+
+        /* Interactive Detail Modal */
+        .cal-modal-backdrop {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(15, 23, 42, 0.65);
+            backdrop-filter: blur(4px);
+            z-index: 9999;
+            align-items: center;
+            justify-content: center;
+            padding: 1rem;
+        }
+        .cal-modal-backdrop.open {
+            display: flex;
+        }
+        .cal-modal-dialog {
+            background: #ffffff;
+            border-radius: 18px;
+            width: 100%;
+            max-width: 540px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.25);
+            border: 1px solid #e2e8f0;
+            overflow: hidden;
+            animation: modalFadeIn 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+        @keyframes modalFadeIn {
+            from { opacity: 0; transform: scale(0.95); }
+            to { opacity: 1; transform: scale(1); }
+        }
+        .cal-modal-header {
+            background: linear-gradient(135deg, #1e1035, #2a114d);
+            color: #ffffff;
+            padding: 1.25rem 1.5rem;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        .cal-modal-header h4 {
+            font-family: 'Outfit', sans-serif;
+            font-size: 1.25rem;
+            font-weight: 700;
+            margin: 0;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .cal-modal-close {
+            background: rgba(255, 255, 255, 0.1);
+            border: none;
+            color: #ffffff;
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: background 0.2s;
+        }
+        .cal-modal-close:hover {
+            background: rgba(255, 255, 255, 0.25);
+        }
+        .cal-modal-body {
+            padding: 1.5rem;
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+        }
+        .cal-modal-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 0.85rem;
+        }
+        .cal-modal-field label {
+            display: block;
+            font-size: 0.72rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: #64748b;
+            margin-bottom: 3px;
+        }
+        .cal-modal-field div {
+            font-size: 0.92rem;
+            font-weight: 700;
+            color: #0f172a;
+        }
+        .cal-modal-footer {
+            padding: 1rem 1.5rem;
+            background: #f8fafc;
+            border-top: 1px solid #e2e8f0;
+            display: flex;
+            justify-content: flex-end;
+            gap: 0.75rem;
+        }
+
+        /* Responsive */
+        @media (max-width: 991px) {
+            .cal-day-cell {
+                min-height: 110px;
+                padding: 4px;
+            }
+            .cal-event-pill {
+                font-size: 0.65rem;
+                padding: 3px 4px;
+            }
+        }
+        @media (max-width: 768px) {
+            .cal-grid-header {
+                font-size: 0.72rem;
+            }
+            .cal-day-cell {
+                min-height: 85px;
+            }
+        }
+    </style>
+</head>
+<body class="<?= $is_admin_layout ? 'admin-layout-body' : '' ?>">
+
+<?php if ($is_admin_layout): ?>
+    <?php include 'admin-nav.php'; ?>
+    <div class="admin-main-wrapper">
+        <header class="admin-top-header">
+            <button type="button" class="admin-mobile-toggle-btn" onclick="toggleAdminSidebar()" aria-label="Open Navigation Menu">
+                <i class="fa-solid fa-bars"></i>
+            </button>
+            <div class="admin-top-search">
+                <i class="fa-solid fa-magnifying-glass"></i>
+                <input type="text" placeholder="Search reservations..." onkeyup="if(event.key==='Enter') window.location='bookings.php?search='+encodeURIComponent(this.value)">
+            </div>
+            <div class="admin-header-actions">
+                <a href="settings.php?tab=profile" class="hs-user-badge" title="View Admin Profile">
+                    <span class="hs-user-avatar"><?= strtoupper(substr($admin_full_name ?? 'Admin', 0, 1)) ?></span>
+                    <span class="hs-user-name"><?= htmlspecialchars($admin_full_name ?? 'Admin') ?></span>
+                </a>
+                <a href="logout.php" class="hs-btn-logout" onclick="openLogoutModal(event)" title="Sign Out"><i class="fa-solid fa-sign-out-alt"></i></a>
+            </div>
+        </header>
+        <main class="admin-container">
+<?php else: ?>
+    <?php include 'nav.php'; ?>
+    <div class="container" style="padding-top: 2rem; padding-bottom: 3rem;">
+<?php endif; ?>
+
+    <div class="admin-cal-wrapper">
+
+        <!-- Page Header -->
+        <div class="admin-page-header" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
+            <div>
+                <h1 class="admin-page-title" style="margin: 0; font-family: 'Outfit', sans-serif;">
+                    <i class="fa-solid fa-calendar-days" style="color: var(--primary-glow, #7c3aed);"></i>
+                    Resort Schedule & Bookings Calendar
+                </h1>
+                <p class="admin-page-subtitle" style="margin-top: 0.25rem;">
+                    Full calendar overview displaying active and confirmed reservations across past, present, and future dates.
+                </p>
+            </div>
+            <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+                <a href="bookings.php" class="admin-btn admin-btn-primary">
+                    <i class="fa-solid fa-table-list"></i> Booking Manifest
+                </a>
+                <a href="book_house.php" class="admin-btn admin-btn-gold">
+                    <i class="fa-solid fa-plus"></i> New Reservation
+                </a>
+            </div>
+        </div>
+
+        <!-- KPI Summary Cards (Past, Present, Future) -->
+        <div class="cal-kpi-grid">
+            <div class="cal-kpi-card">
+                <div class="cal-kpi-info">
+                    <h3><?= $total_bookings_count ?></h3>
+                    <p>Total Bookings</p>
+                </div>
+                <div class="cal-kpi-icon" style="background: #ede9fe; color: #7c3aed;">
+                    <i class="fa-solid fa-book-bookmark"></i>
+                </div>
+            </div>
+
+            <div class="cal-kpi-card">
+                <div class="cal-kpi-info">
+                    <h3 style="color: #64748b;"><?= $past_bookings_count ?></h3>
+                    <p>Past Bookings</p>
+                </div>
+                <div class="cal-kpi-icon" style="background: #f1f5f9; color: #64748b;">
+                    <i class="fa-solid fa-clock-rotate-left"></i>
+                </div>
+            </div>
+
+            <div class="cal-kpi-card" style="border-color: #fde68a;">
+                <div class="cal-kpi-info">
+                    <h3 style="color: #b45309;"><?= $present_bookings_count ?></h3>
+                    <p>Present / Today Active</p>
+                </div>
+                <div class="cal-kpi-icon" style="background: #fef3c7; color: #d97706;">
+                    <i class="fa-solid fa-bell-concierge"></i>
+                </div>
+            </div>
+
+            <div class="cal-kpi-card" style="border-color: #a7f3d0;">
+                <div class="cal-kpi-info">
+                    <h3 style="color: #047857;"><?= $future_bookings_count ?></h3>
+                    <p>Future Reservations</p>
+                </div>
+                <div class="cal-kpi-icon" style="background: #d1fae5; color: #059669;">
+                    <i class="fa-solid fa-calendar-check"></i>
+                </div>
+            </div>
+        </div>
+
+        <!-- Controls Toolbar -->
+        <div class="cal-toolbar-card">
+            <!-- Top Controls Row: Month navigation & Quick Jump -->
+            <div class="cal-toolbar-row">
+                <div class="cal-month-nav">
+                    <h2 class="cal-month-title">
+                        <i class="fa-regular fa-calendar-check" style="color: #7c3aed;"></i>
+                        <?= $monthName ?>
+                    </h2>
+
+                    <!-- Prev / Today / Next -->
+                    <div style="display: flex; gap: 4px; align-items: center; margin-left: 0.5rem;">
+                        <a href="?month=<?= $prevMonth ?>&year=<?= $prevYear ?>&type=<?= $type_filter ?>&item_id=<?= $item_filter ?>&status=<?= $status_filter ?>&time_scope=<?= $time_filter ?>" 
+                           class="admin-btn admin-btn-outline admin-btn-sm" title="Previous Month">
+                            <i class="fa-solid fa-chevron-left"></i> Prev
+                        </a>
+                        <a href="?month=<?= $current_month ?>&year=<?= $current_year ?>" 
+                           class="admin-btn <?= ($month === $current_month && $year === $current_year) ? 'admin-btn-gold' : 'admin-btn-outline' ?> admin-btn-sm" title="Go to Current Month">
+                            <i class="fa-solid fa-crosshairs"></i> Today
+                        </a>
+                        <a href="?month=<?= $nextMonth ?>&year=<?= $nextYear ?>&type=<?= $type_filter ?>&item_id=<?= $item_filter ?>&status=<?= $status_filter ?>&time_scope=<?= $time_filter ?>" 
+                           class="admin-btn admin-btn-outline admin-btn-sm" title="Next Month">
+                            Next <i class="fa-solid fa-chevron-right"></i>
+                        </a>
+                    </div>
+                </div>
+
+                <!-- Quick Month & Year Selector -->
+                <div style="display: flex; gap: 6px; align-items: center;">
+                    <form method="GET" id="jumpMonthForm" style="display: flex; gap: 6px; margin: 0;">
+                        <input type="hidden" name="type" value="<?= htmlspecialchars($type_filter) ?>">
+                        <input type="hidden" name="item_id" value="<?= $item_filter ?>">
+                        <input type="hidden" name="status" value="<?= htmlspecialchars($status_filter) ?>">
+                        <input type="hidden" name="time_scope" value="<?= htmlspecialchars($time_filter) ?>">
+                        
+                        <select name="month" class="cal-jump-select" onchange="document.getElementById('jumpMonthForm').submit()">
+                            <?php for ($m = 1; $m <= 12; $m++): ?>
+                                <option value="<?= $m ?>" <?= $m === $month ? 'selected' : '' ?>>
+                                    <?= date('F', mktime(0, 0, 0, $m, 10)) ?>
+                                </option>
+                            <?php endfor; ?>
+                        </select>
+
+                        <select name="year" class="cal-jump-select" onchange="document.getElementById('jumpMonthForm').submit()">
+                            <?php for ($y = $current_year - 2; $y <= $current_year + 3; $y++): ?>
+                                <option value="<?= $y ?>" <?= $y === $year ? 'selected' : '' ?>>
+                                    <?= $y ?>
+                                </option>
+                            <?php endfor; ?>
+                        </select>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Bottom Controls Row: Timeline Scopes & Type Filters -->
+            <div class="cal-toolbar-row" style="border-top: 1px solid #f1f5f9; padding-top: 0.85rem;">
+                <!-- Timeline Filter Scope -->
+                <div class="cal-filters-group">
+                    <span style="font-size: 0.78rem; font-weight: 700; color: #64748b; text-transform: uppercase;">Time:</span>
+                    <button type="button" class="cal-filter-btn <?= $time_filter === 'all' ? 'active' : '' ?>" onclick="filterTimeline('all', this)">
+                        <i class="fa-solid fa-layer-group"></i> All (Past, Present, Future)
+                    </button>
+                    <button type="button" class="cal-filter-btn <?= $time_filter === 'present' ? 'active' : '' ?>" onclick="filterTimeline('present', this)">
+                        <i class="fa-solid fa-circle-dot" style="color: #f59e0b;"></i> Present / Today
+                    </button>
+                    <button type="button" class="cal-filter-btn <?= $time_filter === 'future' ? 'active' : '' ?>" onclick="filterTimeline('future', this)">
+                        <i class="fa-solid fa-arrow-trend-up" style="color: #10b981;"></i> Future Reservations
+                    </button>
+                    <button type="button" class="cal-filter-btn <?= $time_filter === 'past' ? 'active' : '' ?>" onclick="filterTimeline('past', this)">
+                        <i class="fa-solid fa-clock-rotate-left"></i> Past Bookings
+                    </button>
+                </div>
+
+                <!-- Live Client-side Filter by Guest Name / Ref -->
+                <div class="cal-search-box">
+                    <i class="fa-solid fa-magnifying-glass"></i>
+                    <input type="text" id="calSearchInput" class="cal-search-input" placeholder="Filter guest / ref on calendar..." oninput="filterCalendarPills(this.value)">
+                </div>
+            </div>
+
+            <!-- Accommodation & Activity Selection Filters -->
+            <div class="cal-toolbar-row" style="background: #f8fafc; border-radius: 8px; padding: 0.6rem 0.85rem;">
+                <div class="cal-filters-group">
+                    <span style="font-size: 0.78rem; font-weight: 700; color: #64748b; text-transform: uppercase;">Category:</span>
+                    <a href="?month=<?= $month ?>&year=<?= $year ?>&type=all&item_id=0&status=<?= $status_filter ?>&time_scope=<?= $time_filter ?>" 
+                       class="cal-filter-btn <?= $type_filter === 'all' ? 'active' : '' ?>">All Categories</a>
+                    <a href="?month=<?= $month ?>&year=<?= $year ?>&type=house&item_id=0&status=<?= $status_filter ?>&time_scope=<?= $time_filter ?>" 
+                       class="cal-filter-btn <?= $type_filter === 'house' ? 'active' : '' ?>"><i class="fa-solid fa-house-chimney"></i> House Kubos</a>
+                    <a href="?month=<?= $month ?>&year=<?= $year ?>&type=activity&item_id=0&status=<?= $status_filter ?>&time_scope=<?= $time_filter ?>" 
+                       class="cal-filter-btn <?= $type_filter === 'activity' ? 'active' : '' ?>"><i class="fa-solid fa-water-ladder"></i> Activities</a>
+                </div>
+
+                <!-- Item Filter Dropdown -->
+                <div style="display: flex; align-items: center; gap: 6px;">
+                    <form method="GET" style="margin: 0;">
+                        <input type="hidden" name="month" value="<?= $month ?>">
+                        <input type="hidden" name="year" value="<?= $year ?>">
+                        <input type="hidden" name="type" value="<?= htmlspecialchars($type_filter) ?>">
+                        <input type="hidden" name="time_scope" value="<?= htmlspecialchars($time_filter) ?>">
+                        <select name="item_id" class="cal-jump-select" onchange="this.form.submit()" style="font-size: 0.82rem;">
+                            <option value="0">🔍 All Rooms & Activities</option>
+                            <optgroup label="House Kubos">
+                                <?php foreach ($all_kubos as $k): ?>
+                                    <option value="<?= $k['kubo_id'] ?>" <?= ($type_filter === 'house' && $item_filter == $k['kubo_id']) ? 'selected' : '' ?>>
+                                        🏠 <?= htmlspecialchars($k['name']) ?>
+                                    </option>
+                                <?php endforeach; ?>
+                            </optgroup>
+                            <optgroup label="Pool & Activities">
+                                <?php foreach ($all_activities as $act): 
+                                    $actId = $act['activity_id'] ?? $act['id'] ?? 0;
+                                    $actName = $act['activity_name'] ?? $act['name'] ?? 'Activity';
+                                ?>
+                                    <option value="<?= $actId ?>" <?= ($type_filter === 'activity' && $item_filter == $actId) ? 'selected' : '' ?>>
+                                        🏊 <?= htmlspecialchars($actName) ?>
+                                    </option>
+                                <?php endforeach; ?>
+                            </optgroup>
+                        </select>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <!-- Full Month Calendar Grid -->
+        <div class="cal-grid-card">
+            <!-- 7 Column Day Titles -->
+            <div class="cal-grid-header">
+                <div class="cal-day-col-title weekend">Sun</div>
+                <div class="cal-day-col-title">Mon</div>
+                <div class="cal-day-col-title">Tue</div>
+                <div class="cal-day-col-title">Wed</div>
+                <div class="cal-day-col-title">Thu</div>
+                <div class="cal-day-col-title">Fri</div>
+                <div class="cal-day-col-title weekend">Sat</div>
+            </div>
+
+            <!-- Grid Day Cells -->
+            <div class="cal-grid-body">
+                <!-- Trailing days from previous month -->
+                <?php foreach ($leadingDays as $leadDay): ?>
+                    <div class="cal-day-cell cal-cell-other-month">
+                        <div class="cal-cell-top">
+                            <span class="cal-cell-num" style="color: #94a3b8;"><?= $leadDay ?></span>
+                        </div>
+                    </div>
+                <?php endforeach; ?>
+
+                <!-- Current Month Days -->
+                <?php for ($d = 1; $d <= $totalDays; $d++): 
+                    $dateKey = sprintf('%04d-%02d-%02d', $year, $month, $d);
+                    $is_today = ($dateKey === $today_str);
+                    $is_past = ($dateKey < $today_str);
+                    $is_future = ($dateKey > $today_str);
+                    
+                    $dayAllBookings = $calendar_map[$dateKey] ?? [];
+
+                    // Filter bookings for this day according to active filters
+                    $dayFilteredBookings = [];
+                    foreach ($dayAllBookings as $b) {
+                        // Type filter
+                        if ($type_filter !== 'all' && ($b['type'] ?? '') !== $type_filter) {
+                            continue;
+                        }
+                        // Specific item filter
+                        if ($item_filter > 0 && intval($b['item_id'] ?? 0) !== $item_filter) {
+                            continue;
+                        }
+                        // Status filter
+                        if ($status_filter !== 'all' && strtolower($b['booking_status'] ?? '') !== $status_filter) {
+                            continue;
+                        }
+                        // Timeline scope filter
+                        if ($time_filter !== 'all' && ($b['timeline_cat'] ?? '') !== $time_filter) {
+                            continue;
+                        }
+                        $dayFilteredBookings[] = $b;
+                    }
+                    $bCount = count($dayFilteredBookings);
+
+                    // Structured data for Day Schedule Modal
+                    $dayModalList = [];
+                    foreach ($dayFilteredBookings as $bItem) {
+                        $dayModalList[] = [
+                            'id' => $bItem['id'] ?? '',
+                            'guest_name' => $bItem['guest_name'] ?? 'Resort Guest',
+                            'guest_email' => $bItem['guest_email'] ?? '',
+                            'guest_phone' => $bItem['guest_phone'] ?? '',
+                            'profile_id' => $bItem['profile_id'] ?? '',
+                            'item_name' => $bItem['item_name'] ?? ($bItem['type'] === 'activity' ? 'Activity' : 'House Kubo'),
+                            'type' => ucfirst($bItem['type'] ?? 'house'),
+                            'check_in' => $bItem['check_in'] ?? '',
+                            'check_out' => $bItem['check_out'] ?? '',
+                            'time_slot' => $bItem['time_slot'] ?? '',
+                            'pax' => $bItem['pax'] ?? 1,
+                            'total_amount' => number_format(floatval($bItem['total_amount'] ?? 0), 2),
+                            'payment_status' => ucfirst($bItem['payment_status'] ?? 'proof_submitted'),
+                            'booking_status' => ucfirst($bItem['booking_status'] ?? 'pending'),
+                            'stay_role' => strtoupper($bItem['role_in_stay'] ?? 'stay'),
+                            'timeline' => strtoupper($bItem['timeline_cat'] ?? 'future'),
+                            'notes' => $bItem['special_notes'] ?? ''
+                        ];
+                    }
+                    $dayBookingsJson = htmlspecialchars(json_encode($dayModalList), ENT_QUOTES, 'UTF-8');
+                    $formattedDateStr = date('l, F j, Y', strtotime($dateKey));
+                    $timelineStatus = $is_today ? 'TODAY' : ($is_past ? 'PAST' : 'UPCOMING');
+                ?>
+                    <div class="cal-day-cell <?= $is_today ? 'cal-cell-today' : ($is_past ? 'cal-cell-past' : 'cal-cell-future') ?>" 
+                         data-date="<?= $dateKey ?>"
+                         data-day="<?= $d ?>"
+                         data-is-today="<?= $is_today ? '1' : '0' ?>"
+                         data-is-past="<?= $is_past ? '1' : '0' ?>"
+                         onclick="openDateScheduleModal('<?= $dateKey ?>', '<?= $formattedDateStr ?>', '<?= $timelineStatus ?>', <?= $dayBookingsJson ?>)"
+                         title="Click to view schedule and bookings for <?= $formattedDateStr ?>">
+                        
+                        <div class="cal-cell-top">
+                            <span class="cal-cell-num">
+                                <?= $d ?>
+                                <?php if ($is_today): ?>
+                                    <span class="cal-today-pill"><i class="fa-solid fa-star"></i> Today</span>
+                                <?php endif; ?>
+                            </span>
+
+                            <?php if ($bCount > 0): ?>
+                                <span class="cal-count-badge" title="<?= $bCount ?> Booking(s) on <?= date('M d', strtotime($dateKey)) ?>">
+                                    <?= $bCount ?> <?= $bCount === 1 ? 'Book' : 'Books' ?>
+                                </span>
+                            <?php endif; ?>
+                        </div>
+
+                        <!-- Booking Event Pills -->
+                        <div class="cal-event-list">
+                            <?php if ($bCount === 0): ?>
+                                <div class="cal-empty-prompt">No bookings</div>
+                            <?php else: ?>
+                                <?php foreach ($dayFilteredBookings as $b): 
+                                    $bType = $b['type'] ?? 'house';
+                                    $stayRole = $b['role_in_stay'] ?? 'stay';
+                                    $timelineCat = $b['timeline_cat'] ?? 'future';
+                                    $bStatus = strtolower($b['booking_status'] ?? 'pending');
+                                    $guestName = $b['guest_name'] ?? 'Resort Guest';
+                                    $itemName = $b['item_name'] ?? ($bType === 'house' ? 'Kubo House' : 'Activity');
+                                    
+                                    // Role Tag display
+                                    $roleTagClass = 'cal-role-stay';
+                                    $roleLabel = 'STAY';
+                                    if ($stayRole === 'checkin') {
+                                        $roleTagClass = 'cal-role-in';
+                                        $roleLabel = 'IN';
+                                    } elseif ($stayRole === 'checkout') {
+                                        $roleTagClass = 'cal-role-out';
+                                        $roleLabel = 'OUT';
+                                    } elseif ($stayRole === 'single') {
+                                        $roleTagClass = 'cal-role-single';
+                                        $roleLabel = 'DAY';
+                                    }
+
+                                    // Type styling
+                                    $pillTypeClass = ($bType === 'activity') ? 'cal-pill-activity' : 'cal-pill-house';
+                                    if ($timelineCat === 'past' || in_array($bStatus, ['completed', 'checked_out'])) {
+                                        $pillTypeClass .= ' cal-pill-past';
+                                    }
+
+                                    // JSON data for Modal
+                                    $modalDataJson = htmlspecialchars(json_encode([
+                                        'id' => $b['id'] ?? '',
+                                        'guest_name' => $guestName,
+                                        'guest_email' => $b['guest_email'] ?? '',
+                                        'guest_phone' => $b['guest_phone'] ?? '',
+                                        'profile_id' => $b['profile_id'] ?? '',
+                                        'item_name' => $itemName,
+                                        'type' => ucfirst($bType),
+                                        'check_in' => $b['check_in'] ?? '',
+                                        'check_out' => $b['check_out'] ?? '',
+                                        'time_slot' => $b['time_slot'] ?? '',
+                                        'pax' => $b['pax'] ?? 1,
+                                        'total_amount' => number_format(floatval($b['total_amount'] ?? 0), 2),
+                                        'payment_status' => ucfirst($b['payment_status'] ?? 'proof_submitted'),
+                                        'booking_status' => ucfirst($b['booking_status'] ?? 'pending'),
+                                        'stay_role' => strtoupper($stayRole),
+                                        'timeline' => strtoupper($timelineCat),
+                                        'notes' => $b['special_notes'] ?? ''
+                                    ]), ENT_QUOTES, 'UTF-8');
+                                ?>
+                                    <div class="cal-event-pill <?= $pillTypeClass ?>" 
+                                         onclick="event.stopPropagation(); openBookingDetailModal(<?= $modalDataJson ?>)"
+                                         data-guest="<?= strtolower(htmlspecialchars($guestName)) ?>"
+                                         data-item="<?= strtolower(htmlspecialchars($itemName)) ?>"
+                                         data-ref="<?= strtolower(htmlspecialchars($b['id'] ?? '')) ?>"
+                                         data-timeline="<?= $timelineCat ?>"
+                                         title="Click to view details | <?= htmlspecialchars($itemName) ?> - <?= htmlspecialchars($guestName) ?> (<?= strtoupper($stayRole) ?>)">
+                                        
+                                        <span class="cal-role-tag <?= $roleTagClass ?>"><?= $roleLabel ?></span>
+                                        <i class="fa-solid <?= $bType === 'activity' ? 'fa-water-ladder' : 'fa-house-chimney' ?>" style="font-size: 0.7rem; flex-shrink: 0;"></i>
+                                        <span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                                            <?= htmlspecialchars($itemName) ?> · <?= htmlspecialchars($guestName) ?>
+                                        </span>
+                                    </div>
+                                <?php endforeach; ?>
+                            <?php endif; ?>
+
+                        </div>
+                    </div>
+                <?php endfor; ?>
+
+                <!-- Trailing empty cells to complete the 7-column grid -->
+                <?php 
+                $daysRendered = count($leadingDays) + $totalDays;
+                $remainingCells = (7 - ($daysRendered % 7)) % 7;
+                for ($nextD = 1; $nextD <= $remainingCells; $nextD++):
+                ?>
+                    <div class="cal-day-cell cal-cell-other-month">
+                        <div class="cal-cell-top">
+                            <span class="cal-cell-num" style="color: #94a3b8;"><?= $nextD ?></span>
+                        </div>
+                    </div>
+                <?php endfor; ?>
+            </div>
+        </div>
+
+        <!-- Legend and Quick Guide -->
+        <div class="cal-legend-card">
+            <div class="cal-legend-items">
+                <span style="font-weight: 700; color: #0f172a;"><i class="fa-solid fa-circle-info"></i> Legend:</span>
+                
+                <span class="cal-legend-item">
+                    <span class="cal-legend-dot" style="background: #f5f3ff; border: 1.5px solid #ddd6fe;"></span>
+                    <span>House Kubo</span>
+                </span>
+                
+                <span class="cal-legend-item">
+                    <span class="cal-legend-dot" style="background: #ecfdf5; border: 1.5px solid #a7f3d0;"></span>
+                    <span>Activity</span>
+                </span>
+
+                <span class="cal-legend-item">
+                    <span class="cal-role-tag cal-role-in" style="font-size: 0.6rem;">IN</span>
+                    <span>Check-in Day</span>
+                </span>
+
+                <span class="cal-legend-item">
+                    <span class="cal-role-tag cal-role-stay" style="font-size: 0.6rem;">STAY</span>
+                    <span>In-House Stay</span>
+                </span>
+
+                <span class="cal-legend-item">
+                    <span class="cal-role-tag cal-role-out" style="font-size: 0.6rem;">OUT</span>
+                    <span>Check-out Day</span>
+                </span>
+
+                <span class="cal-legend-item">
+                    <span class="cal-legend-dot" style="background: #fefce8; border: 1.5px solid #f59e0b;"></span>
+                    <span>Today's Date</span>
+                </span>
+
+                <span class="cal-legend-item">
+                    <span class="cal-legend-dot" style="background: #f1f5f9; border: 1.5px solid #cbd5e1;"></span>
+                    <span>Past Stay</span>
+                </span>
+            </div>
+
+            <div>
+                <a href="bookings.php" class="admin-btn admin-btn-sm admin-btn-outline">
+                    <i class="fa-solid fa-arrow-up-right-from-square"></i> Open Full Manifest
+                </a>
+            </div>
+        </div>
+
+    </div>
+
+<?php if ($is_admin_layout): ?>
+        </main>
+    </div>
+<?php else: ?>
+    </div>
+    <?php include 'footer.php'; ?>
+<?php endif; ?>
+
+<!-- ============================================================ -->
+<!-- INTERACTIVE BOOKING DETAILS MODAL -->
+<!-- ============================================================ -->
+<div class="cal-modal-backdrop" id="calModalBackdrop" onclick="if(event.target === this) closeBookingDetailModal()">
+    <div class="cal-modal-dialog">
+        <div class="cal-modal-header">
+            <h4><i class="fa-solid fa-calendar-check" style="color: #f59e0b;"></i> Reservation Details</h4>
+            <button type="button" class="cal-modal-close" onclick="closeBookingDetailModal()" aria-label="Close modal">
+                <i class="fa-solid fa-xmark"></i>
+            </button>
+        </div>
+        <div class="cal-modal-body">
+            <div style="display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid #f1f5f9; padding-bottom: 0.75rem;">
+                <div>
+                    <span style="font-size: 0.72rem; font-weight: 700; color: #64748b; text-transform: uppercase;">Reference ID</span>
+                    <h3 id="modalRefId" style="font-family: 'Outfit', sans-serif; font-size: 1.25rem; color: #7c3aed; margin: 0;">PBR-0000</h3>
+                </div>
+                <div id="modalStatusBadge">
+                    <span class="admin-badge admin-badge-gold">Pending</span>
+                </div>
+            </div>
+
+            <div class="cal-modal-grid">
+                <div class="cal-modal-field">
+                    <label>Guest Name</label>
+                    <div id="modalGuestName">--</div>
+                </div>
+                <div class="cal-modal-field">
+                    <label>Profile / Account</label>
+                    <div id="modalProfileId">--</div>
+                </div>
+                <div class="cal-modal-field">
+                    <label>Contact Phone</label>
+                    <div id="modalGuestPhone">--</div>
+                </div>
+                <div class="cal-modal-field">
+                    <label>Email Address</label>
+                    <div id="modalGuestEmail">--</div>
+                </div>
+            </div>
+
+            <div style="background: #f8fafc; border-radius: 10px; padding: 0.85rem; border: 1px solid #e2e8f0;" class="cal-modal-grid">
+                <div class="cal-modal-field">
+                    <label>Primary Accommodation / Booking</label>
+                    <div id="modalItemName" style="color: #7c3aed; font-weight: 700;">--</div>
+                </div>
+                <div class="cal-modal-field">
+                    <label>Category</label>
+                    <div id="modalType">--</div>
+                </div>
+                <div class="cal-modal-field">
+                    <label>Stay Schedule (Check-In)</label>
+                    <div id="modalCheckIn">--</div>
+                </div>
+                <div class="cal-modal-field">
+                    <label>Stay Schedule (Check-Out)</label>
+                    <div id="modalCheckOut">--</div>
+                </div>
+                <div class="cal-modal-field">
+                    <label>Guests (Pax)</label>
+                    <div id="modalPax">--</div>
+                </div>
+                <div class="cal-modal-field">
+                    <label>Total Reservation Amount</label>
+                    <div id="modalAmount" style="color: #059669; font-size: 1.05rem; font-weight: 800;">₱0.00</div>
+                </div>
+            </div>
+
+            <!-- Grouped Booked Items & Activity Breakdown (Requirement 6) -->
+            <div id="modalItemsBreakdownSection" style="margin-top: 1rem; border-top: 1px solid #e2e8f0; padding-top: 0.85rem;">
+                <span style="font-size: 0.75rem; font-weight: 800; color: #475569; text-transform: uppercase; letter-spacing: 0.5px; display: flex; align-items: center; gap: 6px;">
+                    <i class="fa-solid fa-list-check" style="color: #7c3aed;"></i> Booked Items & Activities in this Reservation
+                </span>
+                <div id="modalItemsContainer" style="margin-top: 0.6rem; display: flex; flex-direction: column; gap: 8px;">
+                    <!-- Rendered dynamically via JS -->
+                </div>
+            </div>
+
+            <div id="modalNotesWrapper" style="display: none;">
+                <span style="font-size: 0.72rem; font-weight: 700; color: #64748b; text-transform: uppercase;">Special Requests & Notes:</span>
+                <p id="modalNotes" style="font-size: 0.85rem; color: #334155; margin-top: 4px; background: #fffbeb; padding: 8px 12px; border-radius: 8px; border: 1px solid #fde68a;"></p>
+            </div>
+        </div>
+        <div class="cal-modal-footer">
+            <button type="button" class="admin-btn admin-btn-outline" onclick="closeBookingDetailModal()">Close</button>
+            <a href="#" id="modalManifestLink" class="admin-btn admin-btn-primary">
+                <i class="fa-solid fa-arrow-up-right-from-square"></i> Open in Bookings Manifest
+            </a>
+        </div>
+    </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- INTERACTIVE DATE SCHEDULE MODAL (CLICK ON DATE CELL) -->
+<!-- ============================================================ -->
+<div class="cal-modal-backdrop" id="dateScheduleModalBackdrop" onclick="if(event.target === this) closeDateScheduleModal()">
+    <div class="cal-date-modal-dialog">
+        <div class="cal-modal-header" style="background: linear-gradient(135deg, #1e1035, #2a114d);">
+            <div style="display: flex; align-items: center; gap: 10px;">
+                <div style="width: 40px; height: 40px; border-radius: 10px; background: rgba(245, 158, 11, 0.2); border: 1px solid rgba(245, 158, 11, 0.4); display: flex; align-items: center; justify-content: center; color: #f59e0b; font-size: 1.2rem;">
+                    <i class="fa-solid fa-calendar-day"></i>
+                </div>
+                <div>
+                    <h4 id="dateModalTitle" style="font-family: 'Outfit', sans-serif; font-size: 1.25rem; font-weight: 700; margin: 0; color: #ffffff;">
+                        Date Schedule
+                    </h4>
+                    <span id="dateModalSubtitle" style="font-size: 0.78rem; color: #cbd5e1;"></span>
+                </div>
+            </div>
+            <div style="display: flex; align-items: center; gap: 8px;">
+                <span id="dateModalTimelineBadge" class="admin-badge admin-badge-gold">TODAY</span>
+                <button type="button" class="cal-modal-close" onclick="closeDateScheduleModal()" aria-label="Close modal">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+        </div>
+
+        <div class="cal-date-modal-body">
+            <!-- Top Summary Strip -->
+            <div style="display: flex; align-items: center; justify-content: space-between; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 0.85rem 1.25rem; flex-wrap: wrap; gap: 0.75rem;">
+                <div>
+                    <span style="font-size: 0.72rem; font-weight: 700; text-transform: uppercase; color: #64748b; letter-spacing: 0.5px;">Schedule Overview</span>
+                    <div id="dateModalCountText" style="font-size: 1rem; font-weight: 800; color: #0f172a; font-family: 'Outfit', sans-serif;">
+                        0 Bookings
+                    </div>
+                </div>
+                <div>
+                    <a href="#" id="dateModalAddBookingBtn" class="admin-btn admin-btn-sm admin-btn-gold">
+                        <i class="fa-solid fa-plus"></i> Add Reservation for this Date
+                    </a>
+                </div>
+            </div>
+
+            <!-- List of Bookings Container -->
+            <div id="dateModalBookingsList" style="display: flex; flex-direction: column; gap: 0.85rem;">
+                <!-- Populated dynamically via JavaScript -->
+            </div>
+        </div>
+
+        <div class="cal-modal-footer" style="background: #f8fafc; border-top: 1px solid #e2e8f0; display: flex; justify-content: space-between; align-items: center;">
+            <span style="font-size: 0.8rem; color: #64748b;">
+                <i class="fa-solid fa-info-circle"></i> Click any reservation card to open full details.
+            </span>
+            <div style="display: flex; gap: 8px;">
+                <button type="button" class="admin-btn admin-btn-outline" onclick="closeDateScheduleModal()">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// ============================================================
+// DATE SCHEDULE MODAL (CLICK ON DATE CELL)
+// ============================================================
+function openDateScheduleModal(dateKey, formattedDate, timeline, bookings) {
+    document.getElementById('dateModalTitle').textContent = formattedDate;
+    document.getElementById('dateModalSubtitle').textContent = 'Date: ' + dateKey;
+    
+    // Timeline badge
+    const badgeEl = document.getElementById('dateModalTimelineBadge');
+    const isPast = dateKey < todayStr;
+    if (timeline === 'TODAY') {
+        badgeEl.className = 'admin-badge admin-badge-gold';
+        badgeEl.innerHTML = '<i class="fa-solid fa-star"></i> TODAY';
+    } else if (isPast || timeline === 'PAST') {
+        badgeEl.className = 'admin-badge admin-badge-info';
+        badgeEl.innerHTML = '<i class="fa-solid fa-clock-rotate-left"></i> PAST';
+    } else {
+        badgeEl.className = 'admin-badge admin-badge-success';
+        badgeEl.innerHTML = '<i class="fa-solid fa-calendar-check"></i> UPCOMING';
+    }
+
+    // Add booking button link (disabled for past dates)
+    const addBtn = document.getElementById('dateModalAddBookingBtn');
+    if (isPast) {
+        if (addBtn) addBtn.style.display = 'none';
+    } else {
+        if (addBtn) {
+            addBtn.style.display = 'inline-flex';
+            addBtn.href = 'book_house.php?check_in=' + encodeURIComponent(dateKey);
+        }
+    }
+
+    // Render bookings
+    const countEl = document.getElementById('dateModalCountText');
+    const listEl = document.getElementById('dateModalBookingsList');
+    listEl.innerHTML = '';
+
+    const count = (bookings && Array.isArray(bookings)) ? bookings.length : 0;
+    countEl.textContent = count + (count === 1 ? ' Booking Scheduled' : ' Bookings Scheduled');
+
+    if (count === 0) {
+        listEl.innerHTML = `
+            <div style="text-align: center; padding: 2.5rem 1.5rem; background: #fafafa; border: 1.5px dashed #cbd5e1; border-radius: 14px;">
+                <div style="width: 56px; height: 56px; border-radius: 50%; background: ${isPast ? '#f1f5f9' : '#ede9fe'}; color: ${isPast ? '#64748b' : '#7c3aed'}; display: flex; align-items: center; justify-content: center; font-size: 1.5rem; margin: 0 auto 1rem;">
+                    <i class="fa-solid ${isPast ? 'fa-clock-rotate-left' : 'fa-calendar-check'}"></i>
+                </div>
+                <h3 style="font-family: 'Outfit', sans-serif; font-size: 1.15rem; font-weight: 700; color: #1e293b; margin: 0;">${isPast ? 'Past Date' : 'No Reservations on this Date'}</h3>
+                <p style="color: #64748b; font-size: 0.85rem; max-width: 420px; margin: 0.35rem auto 1.25rem;">${isPast ? 'This date has already passed. Reservations cannot be booked for past dates.' : `All house kubos, suites, and pool activities are completely available on ${formattedDate}.`}</p>
+                ${isPast ? `
+                    <button type="button" disabled class="admin-btn" style="background: #e2e8f0; color: #94a3b8; cursor: not-allowed;">
+                        <i class="fa-solid fa-ban"></i> Booking Disabled (Past Date)
+                    </button>
+                ` : `
+                    <a href="book_house.php?check_in=${encodeURIComponent(dateKey)}" class="admin-btn admin-btn-gold">
+                        <i class="fa-solid fa-plus"></i> Create Reservation for ${formattedDate}
+                    </a>
+                `}
+            </div>
+        `;
+    } else {
+        bookings.forEach(b => {
+            const role = (b.stay_role || 'STAY').toUpperCase();
+            
+            let roleBadge = '';
+            if (role === 'CHECKIN' || role === 'IN') {
+                roleBadge = '<span class="admin-badge admin-badge-success" style="font-size: 0.68rem;"><i class="fa-solid fa-arrow-right-to-bracket"></i> Check-in Today</span>';
+            } else if (role === 'CHECKOUT' || role === 'OUT') {
+                roleBadge = '<span class="admin-badge admin-badge-danger" style="font-size: 0.68rem; background: #fff7ed; color: #c2410c; border: 1px solid #ffedd5;"><i class="fa-solid fa-arrow-right-from-bracket"></i> Check-out Today</span>';
+            } else if (role === 'SINGLE' || role === 'DAY') {
+                roleBadge = '<span class="admin-badge admin-badge-info" style="font-size: 0.68rem;"><i class="fa-solid fa-clock"></i> Day Reservation</span>';
+            } else {
+                roleBadge = '<span class="admin-badge admin-badge-purple" style="font-size: 0.68rem;"><i class="fa-solid fa-bed"></i> In-House Stay</span>';
+            }
+
+            const statusSt = (b.booking_status || 'Pending').toLowerCase();
+            let statusBadge = `<span class="admin-badge admin-badge-gold" style="font-size: 0.68rem;">${b.booking_status}</span>`;
+            if (statusSt === 'confirmed') statusBadge = `<span class="admin-badge admin-badge-success" style="font-size: 0.68rem;">Confirmed</span>`;
+            else if (statusSt === 'checked_in') statusBadge = `<span class="admin-badge admin-badge-purple" style="font-size: 0.68rem;">Checked-In</span>`;
+            else if (statusSt === 'checked_out' || statusSt === 'completed') statusBadge = `<span class="admin-badge admin-badge-info" style="font-size: 0.68rem;">Completed</span>`;
+
+            // Build items list preview inside card
+            let itemsPreviewHtml = '';
+            const items = b.items || [];
+            if (items.length > 0) {
+                itemsPreviewHtml = '<div style="margin-top: 8px; display: flex; flex-direction: column; gap: 4px; background: #f8fafc; border-radius: 8px; padding: 6px 10px; border: 1px solid #e2e8f0;">';
+                items.forEach(it => {
+                    const isAct = (it.type || '').toLowerCase() === 'activity';
+                    const itIcon = isAct ? 'fa-water-ladder' : 'fa-house-chimney';
+                    const itColor = isAct ? '#059669' : '#7c3aed';
+                    itemsPreviewHtml += `
+                        <div style="display: flex; align-items: center; justify-content: space-between; font-size: 0.8rem;">
+                            <span style="font-weight: 700; color: #1e293b;">
+                                <i class="fa-solid ${itIcon}" style="color: ${itColor}; margin-right: 5px; font-size: 0.75rem;"></i> ${escapeHtml(it.name)}
+                            </span>
+                            <span style="font-size: 0.72rem; color: #64748b;">
+                                ${escapeHtml(it.time_slot || (it.check_in && it.check_out && it.check_in !== it.check_out ? (it.check_in + ' → ' + it.check_out) : (it.check_in || '')))}
+                            </span>
+                        </div>
+                    `;
+                });
+                itemsPreviewHtml += '</div>';
+            }
+
+            const card = document.createElement('div');
+            card.className = 'cal-day-booking-card card-house';
+            card.style.cursor = 'pointer';
+            card.onclick = function() {
+                openBookingDetailModal(b);
+            };
+            card.innerHTML = `
+                <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 6px;">
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                        <span style="font-weight: 800; font-size: 0.95rem; color: #7c3aed; font-family: 'Outfit', sans-serif;">
+                            #${b.id}
+                        </span>
+                        ${roleBadge}
+                        ${statusBadge}
+                    </div>
+                    <span style="font-weight: 800; color: #059669; font-size: 0.95rem;">₱${b.total_amount}</span>
+                </div>
+
+                <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 10px; margin-top: 6px;">
+                    <div>
+                        <div style="font-size: 1.05rem; font-weight: 800; color: #0f172a; display: flex; align-items: center; gap: 6px;">
+                            <i class="fa-solid fa-house-chimney" style="color: #7c3aed; font-size: 0.95rem;"></i>
+                            ${escapeHtml(b.summary_text || b.item_name)}
+                        </div>
+                        <div style="font-size: 0.85rem; font-weight: 700; color: #334155; margin-top: 2px;">
+                            <i class="fa-solid fa-user" style="color: #94a3b8; font-size: 0.8rem;"></i> ${escapeHtml(b.guest_name)}
+                            ${b.profile_id ? `<span class="admin-badge admin-badge-purple" style="font-size: 0.62rem; margin-left: 4px;">#${escapeHtml(b.profile_id)}</span>` : ''}
+                        </div>
+                        <div style="font-size: 0.78rem; color: #64748b; margin-top: 2px;">
+                            <i class="fa-solid fa-phone" style="font-size: 0.72rem;"></i> ${escapeHtml(b.guest_phone || 'No phone')} · 
+                            <i class="fa-solid fa-envelope" style="font-size: 0.72rem;"></i> ${escapeHtml(b.guest_email || 'No email')}
+                        </div>
+                    </div>
+
+                    <div style="text-align: right; display: flex; flex-direction: column; gap: 4px;">
+                        <span style="font-size: 0.75rem; font-weight: 700; color: #475569;">
+                            <i class="fa-solid fa-users"></i> ${b.pax} Guests
+                        </span>
+                        <span style="font-size: 0.75rem; color: #64748b;">
+                            ${b.check_in} ${b.check_out && b.check_out !== b.check_in ? '→ ' + b.check_out : ''}
+                        </span>
+                    </div>
+                </div>
+
+                ${itemsPreviewHtml}
+
+                <div style="display: flex; justify-content: flex-end; gap: 6px; border-top: 1px solid #f1f5f9; padding-top: 8px; margin-top: 8px;">
+                    <button type="button" class="admin-btn admin-btn-sm admin-btn-gold" style="font-size: 0.75rem;">
+                        <i class="fa-solid fa-eye"></i> View Grouped Booking Details
+                    </button>
+                    <a href="bookings.php?search=${encodeURIComponent(b.id)}" onclick="event.stopPropagation();" class="admin-btn admin-btn-sm admin-btn-primary" style="font-size: 0.75rem;">
+                        <i class="fa-solid fa-arrow-up-right-from-square"></i> Open in Manifest
+                    </a>
+                </div>
+            `;
+            listEl.appendChild(card);
+        });
+    }
+
+    document.getElementById('dateScheduleModalBackdrop').classList.add('open');
+}
+
+function closeDateScheduleModal() {
+    document.getElementById('dateScheduleModalBackdrop').classList.remove('open');
+}
+
+// ============================================================
+// SINGLE BOOKING DETAIL MODAL
+// ============================================================
+function escapeHtml(text) {
+    if (!text) return '';
+    return String(text).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;');
+}
+
+function openBookingDetailModal(data) {
+    if (!data) return;
+    document.getElementById('modalRefId').textContent = data.id || 'N/A';
+    document.getElementById('modalGuestName').textContent = data.guest_name || 'N/A';
+    document.getElementById('modalProfileId').textContent = data.profile_id ? ('Profile #' + data.profile_id) : 'Guest Visitor';
+    document.getElementById('modalGuestPhone').textContent = data.guest_phone || 'None provided';
+    document.getElementById('modalGuestEmail').textContent = data.guest_email || 'None provided';
+    document.getElementById('modalItemName').textContent = data.summary_text || data.item_name || 'Resort Reservation';
+    document.getElementById('modalType').textContent = data.type || 'House Kubo Stay';
+    document.getElementById('modalCheckIn').textContent = data.check_in || 'N/A';
+    document.getElementById('modalCheckOut').textContent = (data.check_out && data.check_out !== data.check_in) ? data.check_out : (data.time_slot || 'Same Day');
+    document.getElementById('modalPax').textContent = (data.pax || 1) + ' Guest(s)';
+    document.getElementById('modalAmount').textContent = '₱' + (data.total_amount || '0.00');
+
+    // Status Badge
+    const statusDiv = document.getElementById('modalStatusBadge');
+    const st = (data.booking_status || 'pending').toLowerCase();
+    let badgeClass = 'admin-badge-gold';
+    if (st === 'confirmed') badgeClass = 'admin-badge-success';
+    else if (st === 'checked_in') badgeClass = 'admin-badge-purple';
+    else if (st === 'checked_out' || st === 'completed') badgeClass = 'admin-badge-info';
+    else if (st === 'cancelled') badgeClass = 'admin-badge-danger';
+    statusDiv.innerHTML = `<span class="admin-badge ${badgeClass}"><i class="fa-solid fa-circle-dot"></i> ${data.booking_status}</span>`;
+
+    // Render All Booked Items & Activities in this Reservation (Requirement 6)
+    const itemsContainer = document.getElementById('modalItemsContainer');
+    if (itemsContainer) {
+        itemsContainer.innerHTML = '';
+        const items = data.items || [];
+        if (items.length > 0) {
+            items.forEach(it => {
+                const isAct = (it.type || '').toLowerCase() === 'activity';
+                const icon = isAct ? 'fa-water-ladder' : 'fa-house-chimney';
+                const iconColor = isAct ? '#059669' : '#7c3aed';
+                const badgeClass = isAct ? 'admin-badge-success' : 'admin-badge-purple';
+                const badgeLabel = isAct ? 'Activity' : 'House Kubo';
+
+                let schedText = '';
+                if (it.check_in && it.check_out && it.check_in !== it.check_out) {
+                    schedText = `${it.check_in} → ${it.check_out}`;
+                } else if (it.time_slot) {
+                    schedText = it.time_slot;
+                } else if (it.check_in) {
+                    schedText = it.check_in;
+                }
+
+                const itemRow = document.createElement('div');
+                itemRow.style.cssText = 'display: flex; align-items: center; justify-content: space-between; background: #ffffff; border: 1.5px solid #e2e8f0; border-radius: 10px; padding: 10px 14px; gap: 10px;';
+                itemRow.innerHTML = `
+                    <div style="display: flex; align-items: center; gap: 12px;">
+                        <div style="width: 38px; height: 38px; border-radius: 10px; background: ${isAct ? '#ecfdf5' : '#f5f3ff'}; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
+                            <i class="fa-solid ${icon}" style="color: ${iconColor}; font-size: 1.05rem;"></i>
+                        </div>
+                        <div>
+                            <div style="font-weight: 800; color: #0f172a; font-size: 0.92rem; font-family: Outfit, sans-serif;">
+                                ${escapeHtml(it.name)}
+                            </div>
+                            <div style="font-size: 0.78rem; color: #64748b; margin-top: 2px;">
+                                <i class="fa-regular fa-calendar-check" style="color: #7c3aed;"></i> ${escapeHtml(schedText || 'Included in Reservation')}
+                            </div>
+                        </div>
+                    </div>
+                    <span class="admin-badge ${badgeClass}" style="font-size: 0.7rem; flex-shrink: 0;">${badgeLabel}</span>
+                `;
+                itemsContainer.appendChild(itemRow);
+            });
+        } else {
+            itemsContainer.innerHTML = '<div style="font-size: 0.85rem; color: #64748b; padding: 6px;">1x Standard Reservation</div>';
+        }
+    }
+
+    // Notes
+    const notesWrapper = document.getElementById('modalNotesWrapper');
+    const notesEl = document.getElementById('modalNotes');
+    if (data.notes && data.notes.trim() !== '') {
+        notesWrapper.style.display = 'block';
+        notesEl.textContent = data.notes;
+    } else {
+        notesWrapper.style.display = 'none';
+    }
+
+    // Direct link to Booking Management
+    const manifestLink = document.getElementById('modalManifestLink');
+    manifestLink.href = 'bookings.php?search=' + encodeURIComponent(data.id);
+
+    document.getElementById('calModalBackdrop').classList.add('open');
+}
+
+function closeBookingDetailModal() {
+    document.getElementById('calModalBackdrop').classList.remove('open');
+}
+
+// ESC to close any modal
+document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') {
+        closeBookingDetailModal();
+        closeDateScheduleModal();
+    }
+});
+
+// ============================================================
+// TIMELINE FILTER (ALL / PRESENT / FUTURE / PAST)
+// ============================================================
+function filterTimeline(scope, btn) {
+    // Update active button
+    document.querySelectorAll('.cal-filter-btn').forEach(b => {
+        if (b.innerText.toLowerCase().includes('past') || b.innerText.toLowerCase().includes('present') || b.innerText.toLowerCase().includes('future') || b.innerText.toLowerCase().includes('all')) {
+            b.classList.remove('active');
+        }
+    });
+    if (btn) btn.classList.add('active');
+
+    const pills = document.querySelectorAll('.cal-event-pill');
+    pills.forEach(pill => {
+        const pillTimeline = pill.getAttribute('data-timeline');
+        if (scope === 'all' || pillTimeline === scope) {
+            pill.style.display = 'flex';
+        } else {
+            pill.style.display = 'none';
+        }
+    });
+}
+
+// ============================================================
+// LIVE SEARCH FILTER
+// ============================================================
+function filterCalendarPills(query) {
+    const q = (query || '').toLowerCase().trim();
+    const pills = document.querySelectorAll('.cal-event-pill');
+    pills.forEach(pill => {
+        const guest = pill.getAttribute('data-guest') || '';
+        const item = pill.getAttribute('data-item') || '';
+        const ref = pill.getAttribute('data-ref') || '';
+        if (!q || guest.includes(q) || item.includes(q) || ref.includes(q)) {
+            pill.style.display = 'flex';
+        } else {
+            pill.style.display = 'none';
+        }
+    });
+}
+</script>
+
+</body>
+</html>

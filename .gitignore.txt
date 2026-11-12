@@ -1,0 +1,24 @@
+# Purple Bamboo Resort - .gitignore
+
+# SMTP / mail credentials - NEVER commit this
+config/smtp.php
+
+# Uploaded user files - large binaries, not for repo
+uploads/receipts/
+uploads/avatars/
+uploads/profiles/
+uploads/ids/
+uploads/kubos/
+
+# Runtime data files
+data/bookings.json
+data/users.json
+data/login_activity.json
+data/kubos.json
+
+# One-time admin scripts - delete after use
+fix_seed_passwords.php
+
+# XAMPP / local dev artifacts
+*.lnk
+scratch/

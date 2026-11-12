@@ -1,0 +1,257 @@
+activity_monitoring.php:61: SELECT ar.reservation_id, b.booking_reference, u.full_name AS guest,
+activity_monitoring.php:208: <span class="hs-user-avatar"><?= strtoupper(substr($admin_full_name ?? 'Admin', 0, 1)) ?></span>
+activity_monitoring.php:209: <span class="hs-user-name"><?= htmlspecialchars($admin_full_name ?? 'Admin') ?></span>
+admin-dashboard.php:631: <span class="hs-user-avatar"><?= strtoupper(substr(!empty(trim($admin_full_name ?? '')) ? trim($admin_full_name) : 'Admin', 0, 1)) ?></span>
+admin-dashboard.php:632: <span class="hs-user-name"><?= htmlspecialchars(!empty(trim($admin_full_name ?? '')) ? trim($admin_full_name) : 'Super Admin') ?></span>
+admin-nav.php:7: $admin_raw_name = trim($_SESSION['full_name'] ?? '');
+admin-nav.php:21: $admin_full_name = $admin_raw_name;
+admin-nav.php:22: $_SESSION['full_name'] = $admin_full_name;
+assets\activity_monitoring.php:25: SELECT ar.reservation_id, b.booking_reference, u.full_name AS guest,
+assets\activity_monitoring.php:80: <div class="profile-avatar-circle"><?= strtoupper(substr($admin_full_name ?? 'Admin', 0, 1)) ?></div>
+assets\activity_monitoring.php:82: <span class="profile-name"><?= htmlspecialchars($admin_full_name ?? 'Admin') ?></span>
+assets\admin-dashboard.php:376: <span class="hs-user-avatar"><?= strtoupper(substr(!empty(trim($admin_full_name ?? '')) ? trim($admin_full_name) : 'Admin', 0, 1)) ?></span>
+assets\admin-dashboard.php:377: <span class="hs-user-name"><?= htmlspecialchars(!empty(trim($admin_full_name ?? '')) ? trim($admin_full_name) : 'Super Admin') ?></span>
+assets\admin-nav.php:7: $admin_raw_name = trim($_SESSION['full_name'] ?? '');
+assets\admin-nav.php:21: $admin_full_name = $admin_raw_name;
+assets\admin-nav.php:22: $_SESSION['full_name'] = $admin_full_name;
+assets\auth.php:82: $_SESSION['full_name'] = $user['full_name'];
+assets\auth.php:104: log_activity("ADMIN_LOGIN_SUCCESS", "Personnel logged in via role-based authentication as {$role}: {$user['full_name']} ({$email})");
+assets\auth.php:112: log_activity("USER_LOGIN_SUCCESS", "Guest logged in via role-based authentication: {$user['full_name']} (Profile ID: {$_SESSION['profile_id']})");
+assets\auth.php:144: $_SESSION['full_name'] = $fu['full_name'];
+assets\auth.php:166: log_activity("ADMIN_LOGIN_SUCCESS", "Personnel logged in via role-based authentication as {$role}: {$fu['full_name']} ({$email})");
+assets\auth.php:174: log_activity("USER_LOGIN_SUCCESS", "Guest logged in via role-based authentication: {$fu['full_name']} (Profile ID: {$fu['profile_id']})");
+assets\auth.php:209: $_SESSION['full_name'] = ($effective_role === 'admin') ? 'Super Admin' : (($effective_role === 'staff') ? 'Front Desk Staff' : 'Dela Cruz, Juan Santos');
+assets\auth.php:231: log_activity("ADMIN_LOGIN_SUCCESS", "Fallback {$effective_role} logged in: {$_SESSION['full_name']}");
+assets\auth.php:300: 'full_name' => ($role === 'admin') ? 'Super Admin' : (($role === 'staff') ? 'Front Desk Staff' : 'Dela Cruz, Juan Santos'),
+assets\auth.php:336: $_SESSION['full_name'] = $user_match['full_name'] ?? ($role === 'admin' ? 'Super Admin' : ($role === 'staff' ? 'Front Desk Staff' : 'Registered Guest'));
+assets\auth.php:346: log_activity("ADMIN_LOGIN_SUCCESS", "Personnel logged in as {$role}: {$user_match['full_name']} ({$email})");
+assets\auth.php:354: log_activity("GUEST_LOGIN_VIA_ADMIN_PORTAL", "Guest {$user_match['full_name']} logged in via admin portal, auto-routing to guest index");
+assets\auth.php:375: 'full_name' => $args[0] ?? '',
+assets\auth.php:399: // Build full_name if empty
+assets\auth.php:400: $full_name = trim($data['full_name'] ?? '');
+assets\auth.php:401: if (empty($full_name)) {
+assets\auth.php:403: $full_name = $last_name . ', ' . $first_name . ($middle_name ? ' ' . $middle_name : '') . ($suffix ? ' ' . $suffix : '');
+assets\auth.php:406: $full_name = implode(' ', $parts);
+assets\auth.php:409: if (empty($full_name)) {
+assets\auth.php:410: $full_name = 'New Guest';
+assets\auth.php:510: full_name, first_name, middle_name, last_name, suffix,
+assets\auth.php:515: :full_name, :first_name, :middle_name, :last_name, :suffix,
+assets\auth.php:522: ':full_name' => $full_name,
+assets\auth.php:565: 'full_name' => $full_name,
+assets\auth.php:595: $_SESSION['full_name'] = $full_name;
+assets\bookings.php:18: $user_name = $_SESSION['full_name'] ?? 'Staff Operations';
+assets\bookings.php:19: $admin_full_name = $_SESSION['full_name'] ?? 'Super Admin';
+assets\bookings.php:81: $by = $_SESSION['full_name'] ?? 'System';
+assets\bookings.php:251: $admin_full_name ?? ($user_name ?? 'Staff')
+assets\bookings.php:317: $adminName = $admin_full_name ?? ($user_name ?? 'Admin');
+assets\bookings.php:327: $adminName = $admin_full_name ?? ($user_name ?? 'Admin');
+assets\bookings.php:3959: <span class="hs-user-avatar"><?= strtoupper(substr($admin_full_name ?? 'Admin', 0, 1)) ?></span>
+assets\bookings.php:3960: <span class="hs-user-name"><?= htmlspecialchars($admin_full_name ?? 'Admin') ?></span>
+assets\bookings.php:5098: $ru_name  = htmlspecialchars($ru['full_name'] ?? '');
+assets\booking_store.php:122: $stmt = $pdo->query("SELECT *, CONCAT_WS(' ', first_name, NULLIF(middle_name, ''), last_name, NULLIF(suffix, '')) AS full_name FROM users ORDER BY id ASC");
+assets\booking_store.php:184: $b['registered_name'] = $regUser['full_name'] ?? $b['guest_name'];
+assets\booking_store.php:373: $cleanName = GuestHelper::normalizeName($regUser['full_name'] ?? '');
+assets\book_activities.php:50: $guest_name = !empty($_SESSION['full_name']) ? $_SESSION['full_name'] : 'Registered Guest';
+assets\book_activities.php:106: <div class="profile-avatar-circle"><?= strtoupper(substr($admin_full_name ?? 'Admin', 0, 1)) ?></div>
+assets\book_activities.php:108: <span class="profile-name"><?= htmlspecialchars($admin_full_name ?? 'Admin') ?></span>
+assets\book_activities.php:145: <strong style="font-size: 0.9rem; color: #1e1b4b;"><?= htmlspecialchars($_SESSION['full_name'] ?? 'Guest') ?></strong>
+assets\book_house.php:255: $guest_name = !empty($_SESSION['full_name']) ? $_SESSION['full_name'] : 'Luffy D Monkey';
+assets\browse_activities.php:250: <div class="profile-avatar-circle"><?= strtoupper(substr($admin_full_name ?? 'Admin', 0, 1)) ?></div>
+assets\browse_activities.php:252: <span class="profile-name"><?= htmlspecialchars($admin_full_name ?? 'Admin') ?></span>
+assets\browse_kubos.php:794: <div class="profile-avatar-circle"><?= strtoupper(substr($admin_full_name ?? 'Admin', 0, 1)) ?></div>
+assets\browse_kubos.php:796: <span class="profile-name"><?= htmlspecialchars($admin_full_name ?? 'Admin') ?></span>
+assets\calendar.php:103: <div class="profile-avatar-circle"><?= strtoupper(substr($admin_full_name ?? 'Admin', 0, 1)) ?></div>
+assets\calendar.php:105: <span class="profile-name"><?= htmlspecialchars($admin_full_name ?? 'Admin') ?></span>
+assets\checkin_checkout.php:74: <div class="profile-avatar-circle"><?= strtoupper(substr($admin_full_name ?? 'Admin', 0, 1)) ?></div>
+assets\checkin_checkout.php:76: <span class="profile-name"><?= htmlspecialchars($admin_full_name ?? 'Admin') ?></span>
+assets\dining_monitoring.php:78: <div class="profile-avatar-circle"><?= strtoupper(substr($admin_full_name ?? 'Admin', 0, 1)) ?></div>
+assets\dining_monitoring.php:80: <span class="profile-name"><?= htmlspecialchars($admin_full_name ?? 'Admin') ?></span>
+assets\dining_store.php:477: $guest_name = trim($data['guest_name'] ?? ($_SESSION['full_name'] ?? 'Resort Guest'));
+assets\edit_homepage.php:16: $admin_user = $_SESSION['full_name'] ?? 'Resort Administrator';
+assets\edit_homepage.php:287: <div class="profile-avatar-circle"><?= strtoupper(substr($admin_full_name ?? 'Admin', 0, 1)) ?></div>
+assets\edit_homepage.php:289: <span class="profile-name"><?= htmlspecialchars($admin_full_name ?? 'Admin') ?></span>
+assets\forgot-password.php:34: $stmt = $pdo->prepare("SELECT user_id, COALESCE(id, user_id) AS id, full_name, email, reset_token, reset_token_expires, password_hash FROM users WHERE LOWER(email) = LOWER(?) LIMIT 1");
+assets\forgot-password.php:54: 'full_name' => $u['full_name'] ?? 'Valued Guest',
+assets\forgot-password.php:78: $stmt = $pdo->prepare("SELECT user_id, COALESCE(id, user_id) AS id, full_name, email, reset_token, reset_token_expires, password_hash FROM users WHERE user_id = ? OR id = ? LIMIT 1");
+assets\forgot-password.php:96: 'full_name' => $u['full_name'] ?? 'Valued Guest',
+assets\forgot-password.php:206: $email_sent = EmailHelper::sendPasswordResetEmail($user['email'], $user['full_name'], $otp_code);
+assets\forgot-password.php:234: $email_sent = EmailHelper::sendPasswordResetEmail($user['email'], $user['full_name'], $otp_code);
+assets\index.php:970: <span>Welcome to Purple Bamboo Resort, <strong><?= htmlspecialchars($_SESSION['full_name'] ?? 'Guest') ?></strong>! Account registered.</span>
+assets\index.php:980: <span>Welcome back, <strong><?= htmlspecialchars($_SESSION['full_name'] ?? 'Guest') ?></strong>!</span>
+assets\manage_menu.php:187: <div class="profile-avatar-circle"><?= strtoupper(substr($admin_full_name ?? 'Admin', 0, 1)) ?></div>
+assets\manage_menu.php:189: <span class="profile-name"><?= htmlspecialchars($admin_full_name ?? 'Admin') ?></span>
+assets\migrate_normalize_guests.php:31: $b['registered_name'] = $regUser['full_name'] ?? $oldName;
+assets\migrate_normalize_guests.php:79: $rawName = ($regUser && !empty($regUser['full_name'])) ? $regUser['full_name'] : $row['guest_name'];
+assets\nav.php:8: $user_name = $_SESSION['full_name'] ?? $_SESSION['username'] ?? 'Guest Visitor';
+assets\reviews.php:12: $current_user_name = $_SESSION['full_name'] ?? '';
+assets\reviews.php:69: $staff_name = !empty($_SESSION['full_name']) ? $_SESSION['full_name'] : 'Purple Bamboo Management';
+assets\reviews.php:144: <div class="profile-avatar-circle"><?= strtoupper(substr($admin_full_name ?? 'Admin', 0, 1)) ?></div>
+assets\reviews.php:146: <span class="profile-name"><?= htmlspecialchars($admin_full_name ?? 'Admin') ?></span>
+assets\review_store.php:136: $guest_name = $_SESSION['full_name'] ?? 'Resort Guest';
+assets\review_store.php:198: $reply_by = $_SESSION['full_name'] ?? 'Resort Management';
+assets\security.php:135: $user_name = $_SESSION['full_name'] ?? 'Guest User';
+assets\security.php:174: 'full_name' => $user_name,
+assets\security.php:207: 'full_name' => str_replace(['Logged in as ', 'Demo login as '], '', $log['details'] ?: 'Guest Account'),
+assets\user-dashboard.php:19: $full_name = $_SESSION['full_name'] ?? trim("{$first_name} {$middle_name} {$last_name}");
+assets\user-dashboard.php:136: <h2 style="font-family: 'Outfit', sans-serif; color: var(--primary-purple); margin-top: 0.25rem;"><?= htmlspecialchars($full_name) ?></h2>
+assets\verify_gcash.php:127: <div class="profile-avatar-circle"><?= strtoupper(substr($admin_full_name ?? 'Admin', 0, 1)) ?></div>
+assets\verify_gcash.php:129: <span class="profile-name"><?= htmlspecialchars($admin_full_name ?? 'Admin') ?></span>
+auth.php:17: $stmt = $pdo->query("SELECT *, CONCAT_WS(' ', first_name, NULLIF(middle_name, ''), last_name, NULLIF(suffix, '')) AS full_name FROM users ORDER BY id ASC");
+auth.php:54: $stmt = $pdo->prepare("SELECT *, 'admin' AS role, CONCAT_WS(' ', first_name, NULLIF(middle_name, ''), last_name, NULLIF(suffix, '')) AS full_name FROM admins WHERE LOWER(email) = :email LIMIT 1");
+auth.php:60: $stmt = $pdo->prepare("SELECT *, 'staff' AS role, CONCAT_WS(' ', first_name, NULLIF(middle_name, ''), last_name, NULLIF(suffix, '')) AS full_name FROM staff WHERE LOWER(email) = :email LIMIT 1");
+auth.php:67: $stmt = $pdo->prepare("SELECT *, role, CONCAT_WS(' ', first_name, NULLIF(middle_name, ''), last_name, NULLIF(suffix, '')) AS full_name FROM users WHERE LOWER(email) = :email LIMIT 1");
+auth.php:105: $computed_name = trim($user['full_name'] ?? '');
+auth.php:120: $_SESSION['full_name'] = $computed_name;
+auth.php:142: log_activity("ADMIN_LOGIN_SUCCESS", "Personnel logged in via role-based authentication as {$role}: {$user['full_name']} ({$email})");
+auth.php:150: log_activity("USER_LOGIN_SUCCESS", "Guest logged in via role-based authentication: {$user['full_name']} (Profile ID: {$_SESSION['profile_id']})");
+auth.php:188: $_SESSION['full_name'] = ($effective_role === 'admin') ? 'Super Admin' : (($effective_role === 'staff') ? 'Front Desk Staff' : 'Dela Cruz, Juan Santos');
+auth.php:210: log_activity("ADMIN_LOGIN_SUCCESS", "Fallback {$effective_role} logged in: {$_SESSION['full_name']}");
+auth.php:248: $stmt = $pdo->prepare("SELECT *, 'admin' AS role, CONCAT_WS(' ', first_name, NULLIF(middle_name, ''), last_name, NULLIF(suffix, '')) AS full_name FROM admins WHERE LOWER(email) = :email LIMIT 1");
+auth.php:253: $stmt = $pdo->prepare("SELECT *, 'staff' AS role, CONCAT_WS(' ', first_name, NULLIF(middle_name, ''), last_name, NULLIF(suffix, '')) AS full_name FROM staff WHERE LOWER(email) = :email LIMIT 1");
+auth.php:274: 'full_name' => ($role === 'admin') ? 'Super Admin' : (($role === 'staff') ? 'Front Desk Staff' : 'Dela Cruz, Juan Santos'),
+auth.php:310: $_SESSION['full_name'] = $user_match['full_name'] ?? ($role === 'admin' ? 'Super Admin' : ($role === 'staff' ? 'Front Desk Staff' : 'Registered Guest'));
+auth.php:320: log_activity("ADMIN_LOGIN_SUCCESS", "Personnel logged in as {$role}: {$user_match['full_name']} ({$email})");
+auth.php:328: log_activity("GUEST_LOGIN_VIA_ADMIN_PORTAL", "Guest {$user_match['full_name']} logged in via admin portal, auto-routing to guest index");
+auth.php:349: 'full_name' => $args[0] ?? '',
+auth.php:516: 'full_name' => $full_name,
+auth.php:543: $_SESSION['full_name'] = $full_name;
+auth.php:577: $full_name = trim(preg_replace('/\s+/', ' ', "{$first_name} {$middle_name} {$last_name} {$suffix}"));
+auth.php:578: if (empty($full_name)) {
+auth.php:579: $full_name = trim($data['full_name'] ?? 'Guest Visitor');
+auth.php:659: $_SESSION['full_name'] = $full_name;
+auth.php:671: log_activity("USER_PROFILE_UPDATED", "User profile updated for user ID: {$userId} ({$full_name})");
+bookings.php:18: $user_name = $_SESSION['full_name'] ?? 'Staff Operations';
+bookings.php:19: $admin_full_name = $_SESSION['full_name'] ?? 'Super Admin';
+bookings.php:81: $by = $_SESSION['full_name'] ?? 'System';
+bookings.php:251: $admin_full_name ?? ($user_name ?? 'Staff')
+bookings.php:317: $adminName = $admin_full_name ?? ($user_name ?? 'Admin');
+bookings.php:327: $adminName = $admin_full_name ?? ($user_name ?? 'Admin');
+bookings.php:3959: <span class="hs-user-avatar"><?= strtoupper(substr($admin_full_name ?? 'Admin', 0, 1)) ?></span>
+bookings.php:3960: <span class="hs-user-name"><?= htmlspecialchars($admin_full_name ?? 'Admin') ?></span>
+bookings.php:5098: $ru_name  = htmlspecialchars($ru['full_name'] ?? '');
+booking_history.php:18: $admin_full_name = $_SESSION['full_name'] ?? 'Super Admin';
+booking_history.php:76: log_activity("BOOKING_RESTORED", "Booking #{$target_id} was restored from history by {$admin_full_name}");
+booking_history.php:91: log_activity("BOOKING_PERMANENT_DELETE", "Booking #{$target_id} permanently deleted by {$admin_full_name}");
+booking_history.php:606: <span class="hs-user-avatar"><?= strtoupper(substr($admin_full_name ?? 'Admin', 0, 1)) ?></span>
+booking_history.php:607: <span class="hs-user-name"><?= htmlspecialchars($admin_full_name ?? 'Admin') ?></span>
+booking_store.php:122: $stmt = $pdo->query("SELECT *, CONCAT_WS(' ', first_name, NULLIF(middle_name, ''), last_name, NULLIF(suffix, '')) AS full_name FROM users ORDER BY id ASC");
+booking_store.php:184: $b['registered_name'] = $regUser['full_name'] ?? $b['guest_name'];
+booking_store.php:373: $cleanName = GuestHelper::normalizeName($regUser['full_name'] ?? '');
+book_activities.php:144: $guest_name = !empty($_SESSION['full_name']) ? $_SESSION['full_name'] : 'Registered Guest';
+book_activities.php:1068: <span class="hs-user-avatar"><?= strtoupper(substr($admin_full_name ?? 'Admin', 0, 1)) ?></span>
+book_activities.php:1069: <span class="hs-user-name"><?= htmlspecialchars($admin_full_name ?? 'Admin') ?></span>
+book_house.php:129: $lead_guest_name = !empty($_SESSION['full_name']) ? $_SESSION['full_name'] : (!empty($existing_booking['guest_name']) ? $existing_booking['guest_name'] : '');
+book_house.php:232: $guest_name = !empty($_SESSION['full_name']) ? $_SESSION['full_name'] : 'Registered Guest';
+book_house.php:2110: <span class="hs-user-avatar"><?= strtoupper(substr($admin_full_name ?? 'Admin', 0, 1)) ?></span>
+book_house.php:2111: <span class="hs-user-name"><?= htmlspecialchars($admin_full_name ?? 'Admin') ?></span>
+browse_activities.php:673: <span class="hs-user-avatar"><?= strtoupper(substr($admin_full_name ?? 'Admin', 0, 1)) ?></span>
+browse_activities.php:674: <span class="hs-user-name"><?= htmlspecialchars($admin_full_name ?? 'Admin') ?></span>
+browse_kubos.php:794: <div class="profile-avatar-circle"><?= strtoupper(substr($admin_full_name ?? 'Admin', 0, 1)) ?></div>
+browse_kubos.php:796: <span class="profile-name"><?= htmlspecialchars($admin_full_name ?? 'Admin') ?></span>
+calendar.php:11: $admin_full_name = $_SESSION['full_name'] ?? 'Super Admin';
+calendar.php:1026: <span class="hs-user-avatar"><?= strtoupper(substr($admin_full_name ?? 'Admin', 0, 1)) ?></span>
+calendar.php:1027: <span class="hs-user-name"><?= htmlspecialchars($admin_full_name ?? 'Admin') ?></span>
+checkin_checkout.php:90: <span class="hs-user-avatar"><?= strtoupper(substr($admin_full_name ?? 'Admin', 0, 1)) ?></span>
+checkin_checkout.php:91: <span class="hs-user-name"><?= htmlspecialchars($admin_full_name ?? 'Admin') ?></span>
+dining.php:16: $guest_name = $_SESSION['full_name'] ?? '';
+dining_monitoring.php:281: <span class="hs-user-avatar"><?= strtoupper(substr($admin_full_name ?? 'Admin', 0, 1)) ?></span>
+dining_monitoring.php:282: <span class="hs-user-name"><?= htmlspecialchars($admin_full_name ?? 'Admin') ?></span>
+dining_store.php:477: $guest_name = trim($data['guest_name'] ?? ($_SESSION['full_name'] ?? 'Resort Guest'));
+edit_homepage.php:21: $admin_user = $_SESSION['full_name'] ?? 'Resort Administrator';
+edit_homepage.php:220: $admin_data['full_name'] = trim(($admin_data['first_name'] ?? '') . ' ' . ($admin_data['middle_name'] ?? '') . ' ' . ($admin_data['last_name'] ?? '') . ' ' . ($admin_data['suffix'] ?? ''));
+edit_homepage.php:221: if (empty($admin_data['full_name'])) {
+edit_homepage.php:222: $admin_data['full_name'] = $_SESSION['full_name'] ?? 'Resort Administrator';
+edit_homepage.php:232: 'full_name' => $_SESSION['full_name'] ?? 'Super Admin',
+edit_homepage.php:247: $new_full_name = trim($first_name . ' ' . $middle_name . ' ' . $last_name . ' ' . $suffix);
+edit_homepage.php:248: if (empty($new_full_name)) {
+edit_homepage.php:259: $_SESSION['full_name'] = $new_full_name;
+edit_homepage.php:260: $admin_user = $new_full_name;
+edit_homepage.php:265: $admin_data['full_name'] = $new_full_name;
+edit_homepage.php:506: <span class="hs-user-avatar"><?= strtoupper(substr($admin_full_name ?? 'Admin', 0, 1)) ?></span>
+edit_homepage.php:507: <span class="hs-user-name"><?= htmlspecialchars($admin_full_name ?? 'Admin') ?></span>
+edit_homepage.php:1126: <?= strtoupper(substr($admin_data['full_name'] ?? 'Admin', 0, 1)) ?>
+edit_homepage.php:1130: <h2 style="font-family: 'Outfit', sans-serif; font-size: 1.6rem; color: #ffffff; margin: 0; font-weight: 800;"><?= htmlspecialchars($admin_data['full_name'] ?? 'Administrator') ?></h2>
+forgot-password.php:39: if (empty($row['full_name'])) {
+forgot-password.php:40: $row['full_name'] = trim(($row['first_name'] ?? '') . ' ' . ($row['last_name'] ?? ''));
+forgot-password.php:61: $stmt = $pdo->prepare("SELECT id, CONCAT_WS(' ', first_name, NULLIF(middle_name, ''), last_name, NULLIF(suffix, '')) AS full_name, email, reset_otp, reset_expires, password_hash FROM `$table` WHERE LOWER(email) = LOWER(?) LIMIT 1");
+forgot-password.php:87: $stmt = $pdo->prepare("SELECT id, CONCAT_WS(' ', first_name, NULLIF(middle_name, ''), last_name, NULLIF(suffix, '')) AS full_name, email, reset_otp, reset_expires, password_hash FROM `$table` WHERE id = ? LIMIT 1");
+forgot-password.php:167: $email_sent = EmailHelper::sendPasswordResetEmail($user['email'], $user['full_name'], $otp_code);
+forgot-password.php:199: $email_sent = EmailHelper::sendPasswordResetEmail($user['email'], $user['full_name'], $otp_code);
+manage_menu.php:197: <span class="hs-user-avatar"><?= strtoupper(substr($admin_full_name ?? 'Admin', 0, 1)) ?></span>
+manage_menu.php:198: <span class="hs-user-name"><?= htmlspecialchars($admin_full_name ?? 'Admin') ?></span>
+migrate_normalize_guests.php:31: $b['registered_name'] = $regUser['full_name'] ?? $oldName;
+migrate_normalize_guests.php:79: $rawName = ($regUser && !empty($regUser['full_name'])) ? $regUser['full_name'] : $row['guest_name'];
+nav.php:8: $user_name = !empty(trim($_SESSION['full_name'] ?? '')) ? trim($_SESSION['full_name']) : (!empty(trim($_SESSION['username'] ?? '')) ? trim($_SESSION['username']) : 'Guest Visitor');
+reviews.php:12: $current_user_name = $_SESSION['full_name'] ?? '';
+reviews.php:66: $staff_name = !empty($_SESSION['full_name']) ? $_SESSION['full_name'] : 'Purple Bamboo Management';
+reviews.php:207: <span class="hs-user-avatar"><?= strtoupper(substr($admin_full_name ?? 'Admin', 0, 1)) ?></span>
+reviews.php:208: <span class="hs-user-name"><?= htmlspecialchars($admin_full_name ?? 'Admin') ?></span>
+review_store.php:132: $guest_name = $_SESSION['full_name'] ?? 'Resort Guest';
+review_store.php:198: $reply_by = $_SESSION['full_name'] ?? 'Front Desk Team';
+security.php:135: $user_name = $_SESSION['full_name'] ?? 'Guest User';
+security.php:174: $fullName = trim(($log['first_name'] ?? '') . ' ' . ($log['last_name'] ?? ''));
+security.php:175: if (empty($fullName)) {
+security.php:176: $fullName = str_replace(['Logged in as ', 'Demo login as '], '', $log['details'] ?: 'Guest Account');
+security.php:182: 'full_name' => $fullName,
+settings.php:30: $viewer_name  = $_SESSION['full_name'] ?? 'Resort Administrator';
+settings.php:234: $msg = "New staff member \"{$res['full_name']}\" ({$res['profile_id']}) created successfully!";
+settings.php:239: $res['full_name'],
+settings.php:290: $res['full_name'] ?? 'Staff Personnel',
+settings.php:370: $adminName = !empty($res['full_name']) ? $res['full_name'] : ($curAdmin['full_name'] ?? $viewer_name);
+settings.php:421: $msg = "New Administrator \"{$res['full_name']}\" ({$res['profile_id']}) registered successfully!";
+settings.php:426: $res['full_name'],
+settings.php:466: 'full_name'   => $_SESSION['full_name'] ?? 'Super Admin',
+settings.php:1896: <tr class="staff-row" data-search="<?= strtolower(htmlspecialchars($staff['full_name'] . ' ' . $staff['email'] . ' ' . $staff['phone'] . ' ' . $staff['profile_id'])) ?>">
+settings.php:1904: <?= htmlspecialchars($staff['full_name']) ?>
+settings.php:1962: onclick="confirmDeleteStaff('<?= htmlspecialchars($staff['email'], ENT_QUOTES) ?>', '<?= htmlspecialchars($staff['full_name'], ENT_QUOTES) ?>')"
+settings.php:2168: <?= htmlspecialchars($adm['full_name']) ?>
+settings.php:2387: <h3 id="view_staff_fullname" style="font-family: 'Outfit', sans-serif; font-size: 1.4rem; font-weight: 800; color: #0f172a; margin: 0 0 4px;"></h3>
+settings.php:2761: document.getElementById('view_staff_fullname').textContent = staff.full_name || (first + ' ' + last);
+staff_store.php:55: public static function buildFullName($first, $middle, $last, $suffix)
+staff_store.php:84: $fullName = trim($u['full_name'] ?? '');
+staff_store.php:85: if (empty($fullName)) {
+staff_store.php:86: $fullName = self::buildFullName($first, $middle, $last, $suffix);
+staff_store.php:102: 'full_name'      => $fullName,
+staff_store.php:317: $fullName = self::buildFullName($firstName, $middleName, $lastName, $suffix);
+staff_store.php:372: log_activity("PERSONNEL_CREATED", "Created new {$role} account: {$fullName} ({$email}, {$profileId})");
+staff_store.php:379: 'full_name'          => $fullName,
+staff_store.php:432: $fullName = self::buildFullName($firstName, $middleName, $lastName, $suffix);
+staff_store.php:460: $sqlU = "UPDATE users SET first_name = :fn, middle_name = :mn, last_name = :ln, suffix = :suf, phone = :ph, full_name = :full";
+staff_store.php:463: ':suf' => $suffix, ':ph' => $phone, ':full' => $fullName, ':em' => $targetEmail
+staff_store.php:482: $_SESSION['full_name']   = $fullName;
+staff_store.php:487: log_activity("PERSONNEL_UPDATED", "Updated personnel details for {$fullName} ({$targetEmail})");
+staff_store.php:494: 'full_name'        => $fullName,
+staff_store.php:538: log_activity("PERSONNEL_DELETED", "Deleted {$existing['role']} account: {$existing['full_name']} ({$targetEmail})");
+staff_store.php:626: 'full_name'  => $user['full_name'] ?? '',
+user-dashboard.php:40: $full_name = !empty(trim($_SESSION['full_name'] ?? '')) ? trim($_SESSION['full_name']) : trim("{$first_name} {$middle_name} {$last_name}");
+user-dashboard.php:41: if (empty($full_name)) {
+user-dashboard.php:42: $full_name = 'Guest Visitor';
+user-dashboard.php:184: <h2 style="font-family: 'Outfit', sans-serif; color: var(--primary-purple); margin-top: 0.25rem;"><?= htmlspecialchars($full_name) ?></h2>
+user_management.php:18: $admin_full_name = $_SESSION['full_name'] ?? 'Super Admin';
+user_management.php:44: Auth::blockUser($target_id, $reason, $admin_full_name, $target_role, $target_email);
+user_management.php:45: log_activity("USER_BLOCKED", "User #{$target_id} ({$target_name}, {$target_role}) blocked by {$admin_full_name}. Reason: {$reason}");
+user_management.php:60: Auth::deactivateUser($target_id, $reason, $admin_full_name, $target_role, $target_email);
+user_management.php:61: log_activity("USER_DEACTIVATED", "User #{$target_id} ({$target_name}, {$target_role}) deactivated by {$admin_full_name}. Reason: {$reason}");
+user_management.php:67: log_activity("USER_ACTIVATED", "User #{$target_id} ({$target_name}, {$target_role}) restored to active by {$admin_full_name}");
+user_management.php:79: SELECT id, profile_id, CONCAT_WS(' ', first_name, NULLIF(middle_name, ''), last_name, NULLIF(suffix, '')) AS full_name, first_name, last_name, email, phone, role, status, is_blocked, block_reason, blocked_at, blocked_by, emergency_contact_name, emergency_contact_relationship, emergency_contact_phone, id_type, id_number, health_conditions, created_at FROM users
+user_management.php:81: SELECT id, profile_id, CONCAT_WS(' ', first_name, NULLIF(middle_name, ''), last_name, NULLIF(suffix, '')) AS full_name, first_name, last_name, email, phone, 'staff' AS role, status, (CASE WHEN status IN ('blocked', 'deactivated') THEN 1 ELSE 0 END) AS is_blocked, block_reason, blocked_at, blocked_by, '' AS emergency_contact_name, '' AS emergency_contact_relationship, '' AS emergency_contact_phone, 'Staff ID' AS id_type, '' AS id_number, '' AS health_conditions, created_at FROM staff
+user_management.php:83: SELECT id, profile_id, CONCAT_WS(' ', first_name, NULLIF(middle_name, ''), last_name, NULLIF(suffix, '')) AS full_name, first_name, last_name, email, phone, 'admin' AS role, status, (CASE WHEN status IN ('blocked', 'deactivated') THEN 1 ELSE 0 END) AS is_blocked, block_reason, blocked_at, blocked_by, '' AS emergency_contact_name, '' AS emergency_contact_relationship, '' AS emergency_contact_phone, 'System Admin' AS id_type, '' AS id_number, '' AS health_conditions, created_at FROM admins
+user_management.php:117: // Ensure full_name is present and normalize status
+user_management.php:119: if (empty($u['full_name'])) {
+user_management.php:120: $u['full_name'] = trim(($u['first_name'] ?? '') . ' ' . ($u['last_name'] ?? ''));
+user_management.php:121: if (empty($u['full_name'])) {
+user_management.php:122: $u['full_name'] = 'Registered User';
+user_management.php:184: ($u['full_name'] ?? '') . ' ' .
+user_management.php:480: <span class="hs-user-avatar"><?= strtoupper(substr($admin_full_name ?? 'Admin', 0, 1)) ?></span>
+user_management.php:481: <span class="hs-user-name"><?= htmlspecialchars($admin_full_name ?? 'Admin') ?></span>
+user_management.php:663: <?= htmlspecialchars($u['full_name']) ?>
+user_management.php:736: <button type="button" class="admin-btn admin-btn-outline admin-btn-sm" style="padding: 5px 9px; color: #d97706; border-color: #fde68a;" title="Deactivate Account" onclick="openDeactivateModal(<?= $u['id'] ?>, '<?= htmlspecialchars(addslashes($u['full_name'])) ?>', '<?= htmlspecialchars(addslashes($u['email'])) ?>', '<?= htmlspecialchars(addslashes($u['profile_id'] ?? 'USR-'.$u['id'])) ?>', '<?= htmlspecialchars(addslashes($r)) ?>')">
+user_management.php:741: <button type="button" class="admin-btn admin-btn-outline admin-btn-sm" style="padding: 5px 9px; color: #f43f5e; border-color: #fecdd3;" title="Block Account" onclick="openBlockModal(<?= $u['id'] ?>, '<?= htmlspecialchars(addslashes($u['full_name'])) ?>', '<?= htmlspecialchars(addslashes($u['email'])) ?>', '<?= htmlspecialchars(addslashes($u['profile_id'] ?? 'USR-'.$u['id'])) ?>', '<?= htmlspecialchars(addslashes($r)) ?>')">
+user_management.php:747: <button type="button" class="admin-btn admin-btn-outline admin-btn-sm" style="padding: 5px 9px; color: #10b981; border-color: #a7f3d0;" title="Reactivate Account" onclick="openActivateModal(<?= $u['id'] ?>, '<?= htmlspecialchars(addslashes($u['full_name'])) ?>', '<?= htmlspecialchars(addslashes($r)) ?>', '<?= htmlspecialchars(addslashes($u['email'])) ?>', 'deactivated')">
+user_management.php:752: <button type="button" class="admin-btn admin-btn-outline admin-btn-sm" style="padding: 5px 9px; color: #f43f5e; border-color: #fecdd3;" title="Escalate to Block Account" onclick="openBlockModal(<?= $u['id'] ?>, '<?= htmlspecialchars(addslashes($u['full_name'])) ?>', '<?= htmlspecialchars(addslashes($u['email'])) ?>', '<?= htmlspecialchars(addslashes($u['profile_id'] ?? 'USR-'.$u['id'])) ?>', '<?= htmlspecialchars(addslashes($r)) ?>')">
+user_management.php:758: <button type="button" class="admin-btn admin-btn-outline admin-btn-sm" style="padding: 5px 9px; color: #10b981; border-color: #a7f3d0;" title="Unblock Account" onclick="openActivateModal(<?= $u['id'] ?>, '<?= htmlspecialchars(addslashes($u['full_name'])) ?>', '<?= htmlspecialchars(addslashes($r)) ?>', '<?= htmlspecialchars(addslashes($u['email'])) ?>', 'blocked')">
+user_management.php:763: <button type="button" class="admin-btn admin-btn-outline admin-btn-sm" style="padding: 5px 9px; color: #d97706; border-color: #fde68a;" title="Change to Deactivated" onclick="openDeactivateModal(<?= $u['id'] ?>, '<?= htmlspecialchars(addslashes($u['full_name'])) ?>', '<?= htmlspecialchars(addslashes($u['email'])) ?>', '<?= htmlspecialchars(addslashes($u['profile_id'] ?? 'USR-'.$u['id'])) ?>', '<?= htmlspecialchars(addslashes($r)) ?>')">
+user_management.php:978: let safeName = (u.full_name || '').replace(/</g, "&lt;");
+user_management.php:1063: let uNameEsc = (u.full_name || '').replace(/'/g, "\\'");
+verify_gcash.php:284: <span class="hs-user-avatar"><?= strtoupper(substr($admin_full_name ?? 'Admin', 0, 1)) ?></span>
+verify_gcash.php:285: <span class="hs-user-name"><?= htmlspecialchars($admin_full_name ?? 'Admin') ?></span>
